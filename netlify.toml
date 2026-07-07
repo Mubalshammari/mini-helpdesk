@@ -1,0 +1,16 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# React Router handles routing client-side. Without this, refreshing (or
+# deep-linking to) a route like /dashboard or /tickets/:id fails, because
+# Netlify's default behavior only serves files that exist on disk - there's
+# no actual /dashboard/index.html. Every path falls through to index.html
+# instead, and the router takes it from there.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
