@@ -5,7 +5,7 @@ import { usePageTitle } from '../hooks/usePageTitle'
 export default function NotFoundPage() {
   usePageTitle('Page not found')
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-stone-50 px-6 text-center dark:bg-stone-950">
+    <div className="missing-page flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-stone-50 px-6 text-center dark:bg-stone-950">
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-500/10">
         <CompassRose size={26} weight="regular" className="text-indigo-600 dark:text-indigo-400" />
       </div>

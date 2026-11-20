@@ -6,17 +6,23 @@ import AuditLogTable from '../components/staff/AuditLogTable'
 
 export default function AuditLogPage() {
   usePageTitle('Audit log')
-  const { entries, loading, refetch, rowLimit } = useAuditLog()
+  const { entries, loading, error, refetch, rowLimit } = useAuditLog()
   useRefreshable('audit-log', refetch)
 
   return (
     <AppShell>
-      <p className="text-sm text-stone-500 dark:text-stone-400">
-        Every status, priority, title, and description change, in one immutable record.
-      </p>
-
-      <div className="mt-5">
-        <AuditLogTable entries={entries} loading={loading} rowLimit={rowLimit} />
+      <div className="page-intro">
+        <h1>Audit trail</h1>
+        <p>Assignment, status and ticket edits in the order they happened.</p>
+      </div>
+      <div className="sheet audit-feed">
+        {error ? (
+          <p role="alert">
+            Couldn’t load the audit trail. <button onClick={refetch}>Try again</button>
+          </p>
+        ) : (
+          <AuditLogTable entries={entries} loading={loading} rowLimit={rowLimit} />
+        )}
       </div>
     </AppShell>
   )

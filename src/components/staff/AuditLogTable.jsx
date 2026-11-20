@@ -6,6 +6,7 @@ import EmptyState from '../ui/EmptyState'
 import { formatDateTime } from '../../lib/format'
 
 const ACTION_LABELS = {
+  assigned_to_changed: 'Assignment changed',
   status_changed: 'Status changed',
   priority_changed: 'Priority changed',
   title_changed: 'Title edited',
@@ -47,7 +48,7 @@ export default function AuditLogTable({ entries, loading, rowLimit }) {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by ticket, admin, or action"
+          aria-label="Search audit trail" placeholder="Search by ticket, admin, or action"
           className="w-full max-w-sm rounded-lg border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm text-stone-900 placeholder:text-stone-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
         />
       </div>
@@ -58,7 +59,7 @@ export default function AuditLogTable({ entries, loading, rowLimit }) {
         </p>
       )}
 
-      <div className="mt-4 flex flex-col gap-2">
+      <div className="audit-stream">
         {loading &&
           Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="h-14 animate-pulse rounded-lg bg-stone-100 dark:bg-stone-800" />
@@ -68,14 +69,14 @@ export default function AuditLogTable({ entries, loading, rowLimit }) {
           filtered.map((entry) => (
             <div
               key={entry.id}
-              className="flex flex-col gap-2 rounded-lg border border-stone-200 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-stone-700"
+              className="audit-event"
             >
               <div className="flex items-center gap-3">
                 <Avatar name={entry.actor?.full_name} size={28} />
                 <div className="min-w-0">
                   <p className="text-sm text-stone-700 dark:text-stone-300">
                     <span className="font-medium text-stone-900 dark:text-stone-100">
-                      {entry.actor?.full_name || 'Removed admin'}
+                      {entry.actor?.full_name || 'Former user'}
                     </span>{' '}
                     {actionLabel(entry.action).toLowerCase()} on{' '}
                     <Link

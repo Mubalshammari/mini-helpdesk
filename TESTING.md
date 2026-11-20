@@ -6,7 +6,7 @@ Treat unchecked boxes as unverified, not as known-broken.
 
 ## 0. Prerequisites
 
-- [ ] All seven migrations applied in order (`0001` → `0007`) in the Supabase
+- [ ] All eight migrations applied in order (`0001` → `0008`) in the Supabase
       SQL Editor, each returning success.
 - [ ] Email confirmation enabled (Authentication → Providers → Email).
 - [ ] `.env` filled in with your project URL + anon key.
@@ -147,3 +147,30 @@ Build on Windows: `npm install` (let the Electron binary download), then
       env vars, deploy.
 - [ ] Deep-link/refresh on a route like `/tickets` on the deployed site → no
       404 (the SPA redirect handles it).
+
+## Ticket workspace regression checks
+
+From the project root, run `npm ci`, `npm run lint` and `npm run build`. To check relative asset paths for Electron, run `BUILD_TARGET=desktop npm run build` in a POSIX shell.
+
+The PostgreSQL tests run on Linux with Python 3, a non-root user, and a free local TCP port. In a Python virtual environment run:
+
+```sh
+python -m pip install pgserver psycopg2-binary
+python tests/workspace_database.py
+```
+
+The script creates and stops a disposable PostgreSQL cluster. It provides the Supabase auth-role fixtures, runs migrations in order, seeds two staff members and verifies competing claims on separate connections. It also checks employee scope, audit entries, page bounds, literal search, reply timestamps and role demotion. The bundled PostgreSQL uses its built-in UUID generator.
+
+For a deployment smoke test, apply migration 0008 to staging first. Sign in as two agents, claim the same open ticket, reply, then switch between All, Unassigned and Assigned to me. Open the same ticket from an employee account and verify its assignee and replies. Repeat on a narrow screen and with reduced motion enabled.
+
+### Browser smoke test
+
+Install the dev dependencies with `npm ci`. With a Python virtual environment active, run:
+
+```sh
+python -m pip install playwright
+python -m playwright install chromium
+python tests/workspace_browser.py
+```
+
+The test builds a separate web bundle in a temporary directory, serves the assets inside Chromium and intercepts the Supabase requests with local fixtures. It exercises sign-up navigation, both queue layouts, pagination, search, claiming, replying, a confirmed status change, staff navigation, dark mode and reduced motion. To use an existing Chromium installation, set `CHROMIUM_PATH` to its executable.

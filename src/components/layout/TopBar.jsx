@@ -14,7 +14,7 @@ const ROLE_BADGE_CLASSES = {
 }
 
 function pageTitle(pathname) {
-  if (pathname === '/') return 'Dashboard'
+  if (pathname === '/') return 'Overview'
   if (pathname.startsWith('/tickets/')) return 'Ticket details'
   if (pathname === '/tickets') return 'Tickets'
   if (pathname === '/audit-log') return 'Audit log'
@@ -30,7 +30,7 @@ export default function TopBar({ onOpenMobileNav }) {
 
   return (
     <header className="sticky top-0 z-30 border-b border-stone-200 bg-white/80 backdrop-blur-sm dark:border-stone-800 dark:bg-stone-950/80">
-      <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
+      <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-2">
           <button
             type="button"
@@ -40,9 +40,9 @@ export default function TopBar({ onOpenMobileNav }) {
           >
             <List size={18} weight="bold" />
           </button>
-          <h1 className="truncate text-base font-semibold text-stone-900 dark:text-stone-100">
+          <p className="top-location truncate text-base font-semibold text-stone-900 dark:text-stone-100">
             {pageTitle(pathname)}
-          </h1>
+          </p>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">

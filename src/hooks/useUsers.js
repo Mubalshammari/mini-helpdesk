@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 
 export function useUsers() {
   const [users, setUsers] = useState([])
+  const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const fetchUsers = useCallback(async () => {
@@ -17,6 +18,7 @@ export function useUsers() {
       .select('id, full_name, role, created_at')
       .order('created_at', { ascending: true })
 
+    setError(error)
     if (!error) setUsers(data)
     setLoading(false)
   }, [])
@@ -47,5 +49,5 @@ export function useUsers() {
     setUsers((prev) => prev.filter((u) => u.id !== targetUserId))
   }, [])
 
-  return { users, loading, refetch: fetchUsers, changeRole, deleteUser }
+  return { users, loading, error, refetch: fetchUsers, changeRole, deleteUser }
 }

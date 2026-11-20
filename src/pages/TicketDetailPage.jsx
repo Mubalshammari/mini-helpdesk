@@ -1,13 +1,20 @@
+import Assignment from '../components/tickets/Assignment'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CaretRight, PencilSimple, MagnifyingGlassMinus, ChatCircleDots } from '@phosphor-icons/react'
+import {
+  ArrowLeft,
+  CaretRight,
+  PencilSimple,
+  MagnifyingGlassMinus,
+  ChatCircleDots,
+} from '@phosphor-icons/react'
 import AppShell from '../components/layout/AppShell'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { useTicket } from '../hooks/useTicket'
 import { useComments } from '../hooks/useComments'
 import { usePageTitle } from '../hooks/usePageTitle'
-import { useRefreshable } from '../context/RefreshContext'
+import { useRefresh } from '../context/RefreshContext'
 import { STATUS_META } from '../components/ui/StatusBadge'
 import { PRIORITY_META } from '../components/ui/PriorityIcon'
 import PriorityIcon from '../components/ui/PriorityIcon'
@@ -25,22 +32,36 @@ import { formatDateTime } from '../lib/format'
 
 export default function TicketDetailPage() {
   const { id } = useParams()
+  return (
+    <AppShell>
+      <TicketDetail key={id} id={id} />
+    </AppShell>
+  )
+}
+
+export function TicketDetail({ id, embedded = false }) {
   const navigate = useNavigate()
   const { user, isStaff } = useAuth()
   const { showToast } = useToast()
-  const { ticket, loading, notFound, refetch, updateTicket, updateTicketOptimistic } = useTicket(id)
-  const { comments, loading: commentsLoading, refetch: refetchComments, createComment } = useComments(id)
+  const { refresh } = useRefresh()
+  const { ticket, error, loading, notFound, refetch, updateTicket } = useTicket(id)
+  const {
+    comments,
+    loading: commentsLoading,
+    error: commentsError,
+    refresh: refetchComments,
+    createComment,
+  } = useComments(id)
   const [editOpen, setEditOpen] = useState(false)
   const [pendingChange, setPendingChange] = useState(null) // { field: 'status' | 'priority', value }
   usePageTitle(ticket?.title ?? 'Ticket')
-  useRefreshable('ticket', refetch)
-  useRefreshable('ticket-comments', refetchComments)
 
   const isOwner = ticket?.user_id === user?.id
   const canEdit = isOwner && ticket?.status === 'open'
 
   async function handleReply(body) {
     await createComment(body, user.id)
+    await refresh()
   }
 
   async function handleSave(patch) {
@@ -52,7 +73,7 @@ export default function TicketDetailPage() {
     const { field, value } = pendingChange
     setPendingChange(null)
     try {
-      await updateTicketOptimistic({ [field]: value })
+      await updateTicket({ [field]: value })
       showToast(field === 'status' ? 'Status updated.' : 'Priority updated.', 'success')
     } catch (err) {
       showToast(err.message ?? `Could not update the ${field}.`, 'error')
@@ -66,30 +87,37 @@ export default function TicketDetailPage() {
     : ''
 
   return (
-    <AppShell>
-      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          aria-label="Go back"
-          className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-300"
-        >
-          <ArrowLeft size={15} weight="bold" />
-        </button>
-        <Link
-          to="/tickets"
-          className="font-medium text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
-        >
-          Tickets
-        </Link>
-        <CaretRight size={12} weight="bold" className="shrink-0 text-stone-300 dark:text-stone-600" />
-        <span className="max-w-[18rem] truncate font-medium text-stone-900 dark:text-stone-100">
-          {loading ? '…' : (ticket?.title ?? 'Not found')}
-        </span>
-      </nav>
+    <article className="ticket-detail">
+      {!embedded && (
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            aria-label="Go back"
+            className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+          >
+            <ArrowLeft size={15} weight="bold" />
+          </button>
+          <Link
+            to="/tickets"
+            className="font-medium text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+          >
+            Tickets
+          </Link>
+          <CaretRight size={12} weight="bold" className="shrink-0 text-stone-300 dark:text-stone-600" />
+          <span className="max-w-[18rem] truncate font-medium text-stone-900 dark:text-stone-100">
+            {loading ? '…' : (ticket?.title ?? 'Not found')}
+          </span>
+        </nav>
+      )}
 
       <div className="mt-6">
         {loading && <TicketDetailSkeleton />}
+        {error && (
+          <p role="alert" className="notice">
+            Couldn’t load this ticket. <button onClick={refetch}>Try again</button>
+          </p>
+        )}
 
         {!loading && notFound && (
           <EmptyState
@@ -122,8 +150,12 @@ export default function TicketDetailPage() {
                 <span>{CATEGORY_LABELS[ticket.category] ?? ticket.category}</span>
                 <PriorityIcon priority={ticket.priority} />
                 <span>Opened {formatDateTime(ticket.created_at)}</span>
-                {ticket.updated_at !== ticket.created_at && <span>Updated {formatDateTime(ticket.updated_at)}</span>}
+                {ticket.updated_at !== ticket.created_at && (
+                  <span>Updated {formatDateTime(ticket.updated_at)}</span>
+                )}
               </div>
+
+              <Assignment ticket={ticket} />
 
               {/* Staff act on the pills; everyone else reads the same pills.
                   One component, one visual language for status across roles. */}
@@ -157,7 +189,11 @@ export default function TicketDetailPage() {
               </h2>
 
               <div className="mt-4">
-                {commentsLoading ? (
+                {commentsError ? (
+                  <p role="alert" className="notice">
+                    Couldn’t load replies. <button onClick={refetchComments}>Try again</button>
+                  </p>
+                ) : commentsLoading ? (
                   <div className="space-y-3">
                     <div className="h-16 animate-pulse rounded-lg bg-stone-100 dark:bg-stone-700" />
                     <div className="h-16 animate-pulse rounded-lg bg-stone-100 dark:bg-stone-700" />
@@ -173,7 +209,12 @@ export default function TicketDetailPage() {
             </div>
 
             {editOpen && (
-              <EditTicketModal open={editOpen} onClose={() => setEditOpen(false)} ticket={ticket} onSave={handleSave} />
+              <EditTicketModal
+                open={editOpen}
+                onClose={() => setEditOpen(false)}
+                ticket={ticket}
+                onSave={handleSave}
+              />
             )}
 
             <ConfirmDialog
@@ -187,6 +228,6 @@ export default function TicketDetailPage() {
           </>
         )}
       </div>
-    </AppShell>
+    </article>
   )
 }

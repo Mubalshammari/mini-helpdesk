@@ -1,124 +1,136 @@
-import { useMemo, useState } from 'react'
-import { MagnifyingGlass, Plus, Ticket as TicketIcon } from '@phosphor-icons/react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { MagnifyingGlass, X, ArrowLeft, ArrowRight } from '@phosphor-icons/react'
 import AppShell from '../components/layout/AppShell'
+import StatusBadge, { STATUS_META } from '../components/ui/StatusBadge'
+import PriorityIcon from '../components/ui/PriorityIcon'
+import { TicketDetail } from './TicketDetailPage'
 import { useAuth } from '../context/AuthContext'
-import { useNewTicket } from '../context/NewTicketContext'
-import { useTickets } from '../hooks/useTickets'
-import { useAdminTickets } from '../hooks/useAdminTickets'
 import { usePageTitle } from '../hooks/usePageTitle'
-import { useRefreshable } from '../context/RefreshContext'
-import TicketCard from '../components/tickets/TicketCard'
-import TicketsQueueTable from '../components/staff/TicketsQueueTable'
-import Button from '../components/ui/Button'
-import EmptyState from '../components/ui/EmptyState'
-import { TicketCardSkeleton } from '../components/ui/Skeleton'
-import { CATEGORIES, STATUSES } from '../lib/constants'
-import { STATUS_META } from '../components/ui/StatusBadge'
+import { useWorkspaceQuery } from '../hooks/useWorkspaceQuery'
+import { supabase } from '../lib/supabaseClient'
+import { STATUSES, CATEGORIES, CATEGORY_LABELS } from '../lib/constants'
+import { formatRelative } from '../lib/format'
 
-// One route, two views: employees get their own tickets as cards, staff get
-// the whole company's queue as a table. Same sidebar entry either way, so
-// nobody has to know which "version" of the page they're on.
+const scopes = { all: 'All tickets', unassigned: 'Unassigned', mine: 'Assigned to me' }
+
 export default function TicketsPage() {
-  usePageTitle('Tickets')
+  usePageTitle('Ticket queue')
   const { isStaff } = useAuth()
-  return <AppShell>{isStaff ? <StaffTickets /> : <EmployeeTickets />}</AppShell>
-}
-
-function StaffTickets() {
-  const { tickets, loading, refetch } = useAdminTickets()
-  useRefreshable('tickets-staff', refetch)
-
-  return (
-    <>
-      <p className="text-sm text-stone-500 dark:text-stone-400">
-        Every ticket across the company. Click a row to open it and act on it.
-      </p>
-      <div className="mt-5">
-        <TicketsQueueTable tickets={tickets} loading={loading} />
-      </div>
-    </>
+  const [params, setParams] = useSearchParams()
+  const search = params.get('q') || ''
+  const scope = isStaff && Object.hasOwn(scopes, params.get('scope')) ? params.get('scope') : 'all'
+  const status = params.get('status') || ''
+  const category = params.get('category') || ''
+  const page = Math.max(1, Math.min(1000000000, Number.parseInt(params.get('page'), 10) || 1))
+  const selected = params.get('ticket')
+  const [draft, setDraft] = useState(search)
+  const opener = useRef(null)
+  const closeButton = useRef(null)
+  const setFilters = useCallback(
+    (patch, replace = false) => {
+      setParams(
+        (previous) => {
+          const next = new URLSearchParams(previous)
+          for (const [key, value] of Object.entries(patch)) {
+            if (value) next.set(key, value)
+            else next.delete(key)
+          }
+          return next
+        },
+        { replace, preventScrollReset: true }
+      )
+    },
+    [setParams]
   )
-}
 
-function EmployeeTickets() {
-  const { openNewTicket } = useNewTicket()
-  const { tickets, loading, refetch } = useTickets()
-  useRefreshable('tickets-own', refetch)
+  useEffect(() => {
+    setDraft(search)
+  }, [search])
+  useEffect(() => {
+    if (draft.trim() === search) return
+    const timer = setTimeout(() => setFilters({ q: draft.trim(), page: null }, true), 250)
+    return () => clearTimeout(timer)
+  }, [draft, search, setFilters])
 
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [categoryFilter, setCategoryFilter] = useState('all')
+  useEffect(() => {
+    if (selected) closeButton.current?.focus({ preventScroll: true })
+  }, [selected])
 
-  const statusCounts = useMemo(() => {
-    const counts = { all: tickets.length }
-    for (const s of STATUSES) counts[s] = 0
-    for (const t of tickets) counts[t.status] = (counts[t.status] ?? 0) + 1
-    return counts
-  }, [tickets])
+  const read = useCallback(
+    () =>
+      supabase.rpc('ticket_queue', {
+        p_search: search,
+        p_status: STATUSES.includes(status) ? status : null,
+        p_category: CATEGORIES.some((c) => c.value === category) ? category : null,
+        p_scope: scope,
+        p_page: page,
+      }),
+    [search, status, category, scope, page]
+  )
+  const { data, error, refresh } = useWorkspaceQuery('queue', read)
+  const pages = data ? Math.max(1, Math.ceil(data.total / 20)) : 1
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return tickets.filter((t) => {
-      if (statusFilter !== 'all' && t.status !== statusFilter) return false
-      if (categoryFilter !== 'all' && t.category !== categoryFilter) return false
-      if (q && !t.title.toLowerCase().includes(q) && !t.description.toLowerCase().includes(q)) return false
-      return true
-    })
-  }, [tickets, search, statusFilter, categoryFilter])
-
-  const hasActiveFilters = search || statusFilter !== 'all' || categoryFilter !== 'all'
+  function closeDetail() {
+    setFilters({ ticket: null })
+    requestAnimationFrame(() =>
+      (opener.current?.isConnected ? opener.current : document.getElementById('queue-search'))?.focus()
+    )
+  }
 
   return (
-    <>
-      <p className="text-sm text-stone-500 dark:text-stone-400">
-        Your support requests, from open to resolved.
-      </p>
-
-      <div className="mt-5 flex flex-wrap gap-2">
-        {['all', ...STATUSES].map((s) => {
-          const active = statusFilter === s
-          const label = s === 'all' ? 'All' : STATUS_META[s].label
-          return (
+    <AppShell>
+      <div className="page-intro">
+        <h1>{isStaff ? 'Ticket queue' : 'My requests'}</h1>
+        <p>
+          {isStaff
+            ? 'Pick up a request or follow work already in progress.'
+            : 'Track your requests and talk to the support team.'}
+        </p>
+      </div>
+      {isStaff && (
+        <div className="scope-tabs" aria-label="Assignment filters">
+          {Object.entries(scopes).map(([key, label]) => (
             <button
-              key={s}
-              type="button"
-              onClick={() => setStatusFilter(s)}
-              aria-pressed={active}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 ring-inset transition-colors ${
-                active
-                  ? 'bg-indigo-600 text-white ring-indigo-600'
-                  : 'bg-white text-stone-600 ring-stone-200 hover:bg-stone-50 dark:bg-stone-800 dark:text-stone-300 dark:ring-stone-700 dark:hover:bg-stone-700'
-              }`}
+              key={key}
+              aria-pressed={scope === key}
+              onClick={() => setFilters({ scope: key, page: null })}
             >
               {label}
-              <span className={active ? 'text-indigo-200' : 'text-stone-400 dark:text-stone-500'}>
-                {statusCounts[s] ?? 0}
-              </span>
             </button>
-          )
-        })}
-      </div>
-
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <MagnifyingGlass
-            size={16}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
-          />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search your tickets"
-            className="w-full rounded-lg border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm text-stone-900 placeholder:text-stone-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
-          />
+          ))}
         </div>
+      )}
+      <div className="queue-tools">
+        <label className="search-box">
+          <MagnifyingGlass size={18} />
+          <input
+            id="queue-search"
+            type="search"
+            aria-label="Search tickets"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Search tickets or requesters"
+          />
+        </label>
         <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-200"
+          aria-label="Status"
+          value={status}
+          onChange={(e) => setFilters({ status: e.target.value, page: null })}
         >
-          <option value="all">All categories</option>
+          <option value="">All statuses</option>
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {STATUS_META[s].label}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Category"
+          value={category}
+          onChange={(e) => setFilters({ category: e.target.value, page: null })}
+        >
+          <option value="">All categories</option>
           {CATEGORIES.map((c) => (
             <option key={c.value} value={c.value}>
               {c.label}
@@ -126,34 +138,93 @@ function EmployeeTickets() {
           ))}
         </select>
       </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {loading && Array.from({ length: 6 }).map((_, i) => <TicketCardSkeleton key={i} />)}
-
-        {!loading && filtered.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} />)}
+      <div className={selected ? 'queue-layout with-detail' : 'queue-layout'}>
+        <section className="sheet queue-list" aria-label="Tickets">
+          {error ? (
+            <div role="alert" className="notice">
+              Couldn’t load tickets. <button onClick={refresh}>Try again</button>
+            </div>
+          ) : !data ? (
+            <p className="notice" role="status">
+              Loading tickets…
+            </p>
+          ) : (
+            <>
+              <div className="queue-heading">
+                <strong>
+                  {data.total.toLocaleString()} {data.total === 1 ? 'ticket' : 'tickets'}
+                </strong>
+                <span>Last updated</span>
+              </div>
+              {data.rows.map((ticket) => (
+                <Link
+                  key={ticket.id}
+                  to={'/tickets/' + ticket.id}
+                  className="ticket-row"
+                  aria-current={ticket.id === selected ? 'true' : undefined}
+                  onClick={(e) => {
+                    if (
+                      !e.metaKey &&
+                      !e.ctrlKey &&
+                      !e.shiftKey &&
+                      !e.altKey &&
+                      window.matchMedia('(min-width: 1000px)').matches
+                    ) {
+                      e.preventDefault()
+                      opener.current = e.currentTarget
+                      setFilters({ ticket: ticket.id })
+                    }
+                  }}
+                >
+                  <div className="row-main">
+                    <small>
+                      {CATEGORY_LABELS[ticket.category]} · {ticket.requester}
+                    </small>
+                    <strong>{ticket.title}</strong>
+                    <span className="row-owner">{ticket.assignee || 'Unassigned'}</span>
+                  </div>
+                  <div className="row-state">
+                    <StatusBadge status={ticket.status} size="sm" />
+                    <PriorityIcon priority={ticket.priority} />
+                  </div>
+                  <time dateTime={ticket.updated_at}>{formatRelative(ticket.updated_at)}</time>
+                </Link>
+              ))}
+              {!data.rows.length && <p className="notice">No tickets in this view.</p>}
+              <nav className="pagination" aria-label="Ticket pages">
+                <button
+                  aria-label="Previous page"
+                  disabled={data.page <= 1}
+                  onClick={() => setFilters({ page: data.page - 1 })}
+                >
+                  <ArrowLeft />
+                </button>
+                <span>
+                  Page {data.page} of {pages}
+                </span>
+                <button
+                  aria-label="Next page"
+                  disabled={data.page >= pages}
+                  onClick={() => setFilters({ page: data.page + 1 })}
+                >
+                  <ArrowRight />
+                </button>
+              </nav>
+            </>
+          )}
+        </section>
+        {selected && (
+          <section className="detail-panel" aria-label="Selected ticket">
+            <header>
+              <Link to={'/tickets/' + selected}>Open full page ↗</Link>
+              <button ref={closeButton} aria-label="Close ticket panel" onClick={closeDetail}>
+                <X size={18} />
+              </button>
+            </header>
+            <TicketDetail key={selected} id={selected} embedded />
+          </section>
+        )}
       </div>
-
-      {!loading && filtered.length === 0 && tickets.length > 0 && (
-        <EmptyState
-          icon={MagnifyingGlass}
-          title="No tickets match your filters"
-          description="Try a different search term or clear the filters to see everything."
-        />
-      )}
-
-      {!loading && tickets.length === 0 && !hasActiveFilters && (
-        <EmptyState
-          icon={TicketIcon}
-          title="No tickets yet"
-          description="When something needs IT's attention, file a ticket and track it here."
-          action={
-            <Button onClick={openNewTicket}>
-              <Plus size={16} weight="bold" />
-              Create your first ticket
-            </Button>
-          }
-        />
-      )}
-    </>
+    </AppShell>
   )
 }

@@ -11,7 +11,8 @@ export default function AppShell({ children }) {
   }, [collapsed])
 
   return (
-    <div className="flex min-h-dvh bg-stone-50 dark:bg-stone-950">
+    <div className="workspace flex min-h-dvh">
+      <a className="skip-link" href="#workspace-main" onClick={e => { e.preventDefault(); document.getElementById('workspace-main')?.focus() }}>Skip to content</a>
       <Sidebar
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((v) => !v)}
@@ -20,7 +21,7 @@ export default function AppShell({ children }) {
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar onOpenMobileNav={() => setMobileNavOpen(true)} />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">{children}</main>
+        <main id="workspace-main" tabIndex={-1} className="workspace-main">{children}</main>
       </div>
     </div>
   )

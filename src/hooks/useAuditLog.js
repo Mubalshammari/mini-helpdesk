@@ -10,6 +10,7 @@ const ROW_LIMIT = 200
 
 export function useAuditLog() {
   const [entries, setEntries] = useState([])
+  const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const fetchLog = useCallback(async () => {
@@ -20,6 +21,7 @@ export function useAuditLog() {
       .order('created_at', { ascending: false })
       .limit(ROW_LIMIT)
 
+    setError(error)
     if (!error) setEntries(data)
     setLoading(false)
   }, [])
@@ -28,5 +30,5 @@ export function useAuditLog() {
     fetchLog()
   }, [fetchLog])
 
-  return { entries, loading, refetch: fetchLog, rowLimit: ROW_LIMIT }
+  return { entries, loading, error, refetch: fetchLog, rowLimit: ROW_LIMIT }
 }

@@ -48,6 +48,11 @@ export default defineConfig({
     // otherwise emit as an INLINE <script> and thus violate script-src
     // 'self' - is unnecessary and disabled.
     modulePreload: { polyfill: false },
+    rollupOptions: {
+      output: {
+        manualChunks: { database: ['@supabase/supabase-js'], react: ['react', 'react-dom', 'react-router-dom'] },
+      },
+    },
   },
   server: {
     port: 6234,

@@ -13,6 +13,16 @@ project so their data is always in sync.
 
 ---
 
+## Support workspace
+
+Staff can claim an active ticket from the queue, read its conversation and reply alongside the list. On small screens the same link opens the full ticket. Both employees and staff can see the assigned agent. A demotion or account removal releases the agent’s tickets.
+
+Search matches a literal substring in titles, descriptions and requester names. Filters and pagination are encoded in the URL. The database counts all visible matches and returns 20 per page, ordered by last activity. Posting a reply updates that activity time. The overview uses the viewer’s local day for its daily total.
+
+Both reporting functions run with the caller’s row-level policies. Only the narrow claim function can assign a ticket. Concurrent callers receive the same winning agent and retrying a claim adds no extra audit entry.
+
+[Implementation references](docs/workspace-references.md) · [Test instructions](TESTING.md)
+
 ## Features
 
 Three role tiers: **employee** (submits tickets), **it** (handles tickets),
@@ -351,9 +361,11 @@ top to bottom, once:
    drop). Harmless no-op on a fresh install from current `0006`; needed only
    if you applied an earlier `0006` and hit the "already applied" guard.
 
-Migrations 0002-0007 are each wrapped in their own transaction, so any one
+8. [Ticket workspace migration](supabase/migrations/0008_ticket_workspace.sql) adds assignments, server-side paging, search and dashboard totals. Apply it before deploying the new frontend.
+
+Migrations 0002-0008 are each wrapped in their own transaction, so any one
 of them either fully applies or leaves the database untouched if something
-goes wrong partway through. On a brand-new project all seven run cleanly
+goes wrong partway through. On a brand-new project all eight run cleanly
 back to back. If you're evolving an existing Mini Helpdesk project, run
 whichever ones you haven't applied yet, in order - each file's header
 comment explains what it assumes is already in place.
@@ -550,7 +562,8 @@ mini-helpdesk/
 │       ├── 0004_creator_priority.sql # ticket creator sets initial priority
 │       ├── 0005_live_sync.sql        # publish tickets + comments to Realtime
 │       ├── 0006_account_deletion.sql # guarded, audited account deletion RPC
-│       └── 0007_account_deletion_hardening.sql  # idempotent forward-fix of 0006
+│       ├── 0007_account_deletion_hardening.sql  # idempotent forward-fix of 0006
+│       └── 0008_ticket_workspace.sql          # assignments, queue and overview
 ├── electron/
 │   ├── main.cjs              # hardened main process (window, CSP, APP_MODE, nav guards)
 │   └── preload.cjs           # minimal contextBridge - the only renderer↔main bridge
