@@ -1,53 +1,45 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { useWorkspaceQuery } from './useWorkspaceQuery'
 
-export function useUsers() {
-  const [users, setUsers] = useState([])
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
+export const DIRECTORY_PAGE_SIZE = 12
 
-  const fetchUsers = useCallback(async () => {
-    setLoading(true)
-    // profiles_select_any_authenticated (0001_init.sql section 5) already
-    // lets any authenticated user read every profile - this page's own
-    // access is what's restricted (adminOnly route), not the underlying
-    // read. See supabase/migrations/0002_role_tiers.sql for why role
-    // changes themselves still require the set_user_role() RPC below.
-    const { data, error } = await supabase
+export function useUsers({ name, role, page }) {
+  const read = useCallback(async () => {
+    const start = (page - 1) * DIRECTORY_PAGE_SIZE
+    let query = supabase
       .from('profiles')
-      .select('id, full_name, role, created_at')
-      .order('created_at', { ascending: true })
+      .select('id, full_name, role, created_at', { count: 'exact' })
+      .order('full_name')
+      .order('id')
+      .range(start, start + DIRECTORY_PAGE_SIZE - 1)
 
-    setError(error)
-    if (!error) setUsers(data)
-    setLoading(false)
-  }, [])
+    if (role) query = query.eq('role', role)
+    // Postgres's literal regex prefix keeps names containing *, %, _, or backslashes searchable.
+    if (name) query = query.filter('full_name', 'imatch', '***=' + name)
 
-  useEffect(() => {
-    fetchUsers()
-  }, [fetchUsers])
+    const { data, error, count } = await query
+    if (page > 1 && error?.code === 'PGRST103') return { data: { members: [], total: 0 } }
+    if (error) return { error }
+    return { data: { members: data, total: count ?? data.length } }
+  }, [name, role, page])
 
-  const changeRole = useCallback(async (targetUserId, newRole) => {
-    const { data, error } = await supabase.rpc('set_user_role', {
-      p_target_user_id: targetUserId,
+  const { data, error, refresh } = useWorkspaceQuery('team-directory', read)
+
+  async function changeRole(memberId, newRole) {
+    const result = await supabase.rpc('set_user_role', {
+      p_target_user_id: memberId,
       p_new_role: newRole,
     })
-    if (error) throw error
-    setUsers((prev) => prev.map((u) => (u.id === targetUserId ? data : u)))
-    return data
-  }, [])
+    if (result.error) throw result.error
+    await refresh()
+  }
 
-  // Server-side: delete_user_account() re-verifies the caller is an admin,
-  // refuses self-deletion, writes the account_deletions audit row, and
-  // deletes auth.users (cascading everything the user owned) - see
-  // supabase/migrations/0006_account_deletion.sql.
-  const deleteUser = useCallback(async (targetUserId) => {
-    const { error } = await supabase.rpc('delete_user_account', {
-      p_target_user_id: targetUserId,
-    })
-    if (error) throw error
-    setUsers((prev) => prev.filter((u) => u.id !== targetUserId))
-  }, [])
+  async function deleteUser(memberId) {
+    const result = await supabase.rpc('delete_user_account', { p_target_user_id: memberId })
+    if (result.error) throw result.error
+    await refresh()
+  }
 
-  return { users, loading, error, refetch: fetchUsers, changeRole, deleteUser }
+  return { data, error, refresh, changeRole, deleteUser }
 }

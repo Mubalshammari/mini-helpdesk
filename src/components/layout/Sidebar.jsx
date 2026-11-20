@@ -28,7 +28,9 @@ function Navigation({ compact, close, toggle }) {
   return (
     <>
       <div className="rail-brand">
-        <Ticket size={28} weight="duotone" />
+        <span className="rail-logomark">
+          <Ticket size={25} weight="duotone" />
+        </span>
         {!compact && <strong>Mini Helpdesk</strong>}
         {close && (
           <button aria-label="Close menu" onClick={close}>
@@ -70,7 +72,7 @@ function Navigation({ compact, close, toggle }) {
         <Avatar name={profile?.full_name} size={32} />
         {!compact && (
           <div>
-            <strong>{profile?.full_name || 'Your account'}</strong>
+            <strong title={profile?.full_name || undefined}>{profile?.full_name || 'Your account'}</strong>
             <small>{ROLE_LABELS[profile?.role]}</small>
           </div>
         )}
@@ -106,6 +108,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
       <dialog
         className="mobile-drawer"
         ref={drawer}
+        aria-label="Workspace navigation"
         onCancel={onCloseMobile}
         onClick={(e) => {
           if (e.target === drawer.current) onCloseMobile()

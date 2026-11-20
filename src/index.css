@@ -177,14 +177,6 @@ body {
 .mobile-drawer::backdrop {
   background: #111e17a8;
 }
-.workspace header.sticky {
-  background: var(--sheet);
-  border-color: var(--line);
-}
-.top-location {
-  color: var(--muted);
-  font-size: 0.82rem;
-}
 .page-intro {
   margin-bottom: 1.75rem;
 }
@@ -195,8 +187,7 @@ body {
   font: 500 clamp(2.45rem, 5vw, 4.4rem)/1.06 var(--display);
   letter-spacing: -0.055em;
 }
-.page-intro p,
-.daily-count {
+.page-intro p {
   color: var(--muted);
   font-size: 0.88rem;
   margin-top: 0.7rem;
@@ -210,32 +201,6 @@ body {
   border: 1px solid var(--line);
   border-radius: 1rem;
 }
-.overview-grid {
-  display: grid;
-  grid-template-columns: 1.05fr 1fr;
-  gap: 1.1rem;
-}
-.dispatch-card {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  background: var(--forest);
-  color: #f4f5e8;
-  border-radius: 1rem;
-  padding: clamp(1.25rem, 3vw, 2.35rem);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-.dispatch-card > span {
-  font-size: 0.93rem;
-}
-.dispatch-card > strong {
-  font: 500 clamp(4.4rem, 7vw, 7rem)/1.1 var(--display);
-  color: #d6ecb7;
-  margin-block: 0.35rem 1rem;
-}
-.dispatch-card a,
 .primary-action {
   display: inline-flex;
   align-items: center;
@@ -248,7 +213,6 @@ body {
   font-weight: 650;
   margin-top: auto;
 }
-.dispatch-art,
 .paper-art {
   position: absolute;
   inset: 0;
@@ -256,7 +220,6 @@ body {
   overflow: hidden;
   pointer-events: none;
 }
-.dispatch-art i,
 .paper-art i {
   position: absolute;
   width: 44%;
@@ -268,83 +231,18 @@ body {
   border-radius: 12px;
   background: repeating-linear-gradient(95deg, transparent 0 8px, #63866d55 8px 9px);
 }
-.dispatch-art i:nth-child(2),
 .paper-art i:nth-child(2) {
   transform: rotate(44deg);
 }
-.dispatch-art i:nth-child(3),
 .paper-art i:nth-child(3) {
   transform: rotate(60deg);
 }
-.volume {
-  padding: clamp(1.25rem, 3vw, 2rem);
-}
-.section-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.section-line h2 {
-  font: 500 clamp(1.45rem, 2.3vw, 2rem)/1.15 var(--display);
-  letter-spacing: -0.035em;
-}
-.section-line span,
-.section-line a,
 .queue-heading,
 .pagination,
-.ticket-row time,
-.activity-feed time {
+.ticket-row time {
   font-size: 0.77rem;
   color: var(--muted);
 }
-.section-line a {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--accent);
-  font-weight: 650;
-}
-.spectrum {
-  display: flex;
-  height: 0.65rem;
-  margin: 1.4rem 0;
-  background: var(--line);
-  border-radius: 5px;
-  overflow: hidden;
-}
-.stage-open {
-  background: #abcd90;
-}
-.stage-in_progress {
-  background: #d7984f;
-}
-.stage-resolved {
-  background: #428868;
-}
-.stage-closed {
-  background: #899398;
-}
-.stage-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem 1.25rem;
-}
-.stage-list a {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0;
-  font-size: 0.85rem;
-}
-.stage-list b {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-}
-.feed-title {
-  margin: 2.2rem 0 0.85rem;
-}
-.activity-feed a,
 .ticket-row {
   display: flex;
   align-items: center;
@@ -352,30 +250,20 @@ body {
   padding: 1rem 1.2rem;
   border-bottom: 1px solid var(--line);
 }
-.activity-feed a:last-child {
-  border: 0;
-}
-.activity-feed a:hover,
 .ticket-row:hover,
 .ticket-row[aria-current='true'] {
   background: color-mix(in srgb, var(--accent) 8%, var(--sheet));
 }
-.activity-feed a > div,
 .row-main {
   flex: 1;
   min-width: 0;
 }
-.activity-feed small,
 .row-main small,
 .row-owner {
   display: block;
   color: var(--muted);
   font-size: 0.76rem;
 }
-.activity-feed small {
-  text-transform: capitalize;
-}
-.activity-feed strong,
 .row-main strong {
   display: block;
   overflow-wrap: anywhere;
@@ -627,8 +515,7 @@ body {
       border-color 0.16s ease;
   }
   @supports (animation-timeline: view()) {
-    .ticket-row,
-    .activity-feed a {
+    .ticket-row {
       animation: page-enter linear both;
       animation-timeline: view();
       animation-range: entry 0% entry 70%;
@@ -661,7 +548,6 @@ body {
   }
 }
 @media (max-width: 700px) {
-  .overview-grid,
   .auth-layout {
     grid-template-columns: 1fr;
   }
@@ -708,16 +594,6 @@ body {
   }
   .ticket-row time {
     text-align: right;
-  }
-  .activity-feed a {
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-  .activity-feed a > div {
-    flex-basis: 100%;
-  }
-  .activity-feed time {
-    margin-left: auto;
   }
 }
 .desk-dialog {

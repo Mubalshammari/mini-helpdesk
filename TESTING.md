@@ -6,7 +6,7 @@ Treat unchecked boxes as unverified, not as known-broken.
 
 ## 0. Prerequisites
 
-- [ ] All eight migrations applied in order (`0001` → `0008`) in the Supabase
+- [ ] All eleven migrations applied in order (`0001` → `0011`) in the Supabase
       SQL Editor, each returning success.
 - [ ] Email confirmation enabled (Authentication → Providers → Email).
 - [ ] `.env` filled in with your project URL + anon key.
@@ -157,11 +157,15 @@ The PostgreSQL tests run on Linux with Python 3, a non-root user, and a free loc
 ```sh
 python -m pip install pgserver psycopg2-binary
 python tests/workspace_database.py
+python tests/audit_database.py
+python tests/staff_notes_database.py
 ```
 
 The script creates and stops a disposable PostgreSQL cluster. It provides the Supabase auth-role fixtures, runs migrations in order, seeds two staff members and verifies competing claims on separate connections. It also checks employee scope, audit entries, page bounds, literal search, reply timestamps and role demotion. The bundled PostgreSQL uses its built-in UUID generator.
 
-For a deployment smoke test, apply migration 0008 to staging first. Sign in as two agents, claim the same open ticket, reply, then switch between All, Unassigned and Assigned to me. Open the same ticket from an employee account and verify its assignee and replies. Repeat on a narrow screen and with reduced motion enabled.
+The additional suites verify access to ticket, role and deletion history, and the privacy, retry and concurrency behavior of internal notes.
+
+For a deployment smoke test, apply outstanding migrations through 0011 to staging first. Sign in as two agents, claim the same open ticket, reply, then switch between All, Unassigned and Assigned to me. Open the same ticket from an employee account and verify its assignee and replies. Repeat on a narrow screen and with reduced motion enabled.
 
 ### Browser smoke test
 

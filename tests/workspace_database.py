@@ -111,9 +111,9 @@ def exercise(dsn):
             (other,),
         )
 
-        cursor.execute(
-            (ROOT / "supabase/migrations/0008_ticket_workspace.sql").read_text()
-        )
+        for migration in sorted((ROOT / "supabase/migrations").glob("*.sql")):
+            if migration.name >= "0008":
+                cursor.execute(migration.read_text())
 
     def query(person, sql, args=()):
         with (
@@ -129,11 +129,20 @@ def exercise(dsn):
             cursor.execute(sql, args)
             return cursor.fetchone()[0] if cursor.description else None
 
-    def queue(person, search="", status=None, category=None, scope="all", page=1):
+    def queue(
+        person,
+        search="",
+        status=None,
+        category=None,
+        scope="all",
+        page=1,
+        priority=None,
+        sort="recent",
+    ):
         return query(
             person,
-            "select ticket_queue(%s,%s,%s,%s,%s)",
-            (search, status, category, scope, page),
+            "select ticket_queue(%s,%s,%s,%s,%s,%s,%s)",
+            (search, status, category, scope, page, priority, sort),
         )
 
     def expect_denied(person, sql, args):
@@ -151,6 +160,15 @@ def exercise(dsn):
     assert (
         query(employee, "select ticket_overview(current_date,current_date+1)")["today"]
         == 1045
+    )
+    # Old desktop callers still use the original named signature after upgrading.
+    assert query(employee, "select ticket_queue()") == queue(employee)
+    assert (
+        query(
+            admin,
+            "select has_function_privilege('anon','public.ticket_queue(text,public.ticket_status,public.ticket_category,text,int,public.ticket_priority,text)','execute')",
+        )
+        is False
     )
     expect_denied(employee, "select claim_ticket(%s)", (ticket,))
     expect_denied(
@@ -191,6 +209,40 @@ def exercise(dsn):
     assert (
         query(admin, "select assigned_to from tickets where id=%s", (ticket,)) is None
     )
+
+    # Use fixed creation times to distinguish age from latest activity, even after an edit.
+    with closing(psycopg2.connect(dsn)) as setup, setup, setup.cursor() as cursor:
+        for owner, title, priority, status, age in [
+            (employee, "Triage first urgent", "urgent", "open", 10),
+            (other, "Triage second urgent", "urgent", "in_progress", 8),
+            (other, "Triage resolved", "urgent", "resolved", 12),
+            (other, "Triage routine", "low", "open", 15),
+        ]:
+            cursor.execute(
+                """insert into tickets (user_id, title, description, category, priority, status, created_at, updated_at)
+                   values (%s, %s, 'Fixture for agent triage', 'network', %s, %s,
+                           current_date - %s::integer, current_date - %s::integer)""",
+                (owner, title, priority, status, age, age),
+            )
+
+    active = queue(admin, search="Triage", scope="urgent", sort="oldest")
+    assert [r["title"] for r in active["rows"]] == [
+        "Triage first urgent",
+        "Triage second urgent",
+    ]
+    assert queue(employee, search="Triage", scope="urgent")["total"] == 1
+    assert queue(admin, search="Triage", scope="urgent", priority="high")["total"] == 0
+    assert (
+        queue(admin, search="Triage", priority="urgent", category="network")["total"]
+        == 3
+    )
+    oldest = queue(admin, search="Triage", sort="oldest")["rows"]
+    assert oldest[0]["title"] == "Triage routine" and oldest[-1]["status"] == "resolved"
+    assert [
+        r["priority"] for r in queue(admin, search="Triage", sort="priority")["rows"]
+    ] == ["urgent", "urgent", "urgent", "low"]
+    latest = queue(admin, search="Triage")["rows"]
+    assert latest[0]["title"] == "Triage second urgent"
 
 
 if __name__ == "__main__":

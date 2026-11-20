@@ -15,11 +15,15 @@ project so their data is always in sync.
 
 ## Support workspace
 
-Staff can claim an active ticket from the queue, read its conversation and reply alongside the list. On small screens the same link opens the full ticket. Both employees and staff can see the assigned agent. A demotion or account removal releases the agent’s tickets.
+The overview links directly to active urgent tickets, unassigned work and the signed-in agent’s queue. The ticket list supports priority, category and status filters. Sort by priority, oldest waiting or latest activity. The database returns 20 visible matches per page and counts the complete result set.
 
-Search matches a literal substring in titles, descriptions and requester names. Filters and pagination are encoded in the URL. The database counts all visible matches and returns 20 per page, ordered by last activity. Posting a reply updates that activity time. The overview uses the viewer’s local day for its daily total.
+Staff claim tickets, read conversations and reply from the desktop queue. On phones, the same links open a full ticket. Public replies update the ticket’s activity time. The **Internal notes** tab gives IT and admins a separate handoff thread with its own database permissions. A private note does not notify the requester or change the public activity timestamp.
 
-Both reporting functions run with the caller’s row-level policies. Only the narrow claim function can assign a ticket. Concurrent callers receive the same winning agent and retrying a claim adds no extra audit entry.
+The company audit trail supports search, date ranges and pagination. Staff can inspect ticket events. Admins also see changes to access and account deletions. The team directory supports paginated name and role search. Demoting an agent returns their assignments to the queue.
+
+![Support overview with example tickets](docs/preview/overview.webp)
+
+[Desktop ticket queue](docs/preview/queue.webp) · [Employee ticket on mobile](docs/preview/mobile.webp)
 
 [Implementation references](docs/workspace-references.md) · [Test instructions](TESTING.md)
 
@@ -361,11 +365,17 @@ top to bottom, once:
    drop). Harmless no-op on a fresh install from current `0006`; needed only
    if you applied an earlier `0006` and hit the "already applied" guard.
 
-8. [Ticket workspace migration](supabase/migrations/0008_ticket_workspace.sql) adds assignments, server-side paging, search and dashboard totals. Apply it before deploying the new frontend.
+8. [Ticket workspace migration](supabase/migrations/0008_ticket_workspace.sql) adds assignments, server-side paging, search and dashboard totals. It also keeps existing tickets unassigned until someone claims them.
 
-Migrations 0002-0008 are each wrapped in their own transaction, so any one
+9. [Queue triage](supabase/migrations/0009_queue_triage.sql) adds the active urgent view, priority filter and queue sorting. Older desktop clients retain the previous query signature.
+10. [Company audit](supabase/migrations/0010_audit_activity.sql) adds paginated ticket and account activity under the existing row policies.
+11. [Internal notes](supabase/migrations/0011_staff_notes.sql) adds the staff-only note table and its write function.
+
+Apply any outstanding migrations through 0011, in order, before deploying this frontend. An installation already on 0008 needs only 0009–0011.
+
+Migrations 0002-0011 are each wrapped in their own transaction, so any one
 of them either fully applies or leaves the database untouched if something
-goes wrong partway through. On a brand-new project all eight run cleanly
+goes wrong partway through. On a brand-new project all eleven run cleanly
 back to back. If you're evolving an existing Mini Helpdesk project, run
 whichever ones you haven't applied yet, in order - each file's header
 comment explains what it assumes is already in place.
@@ -563,7 +573,10 @@ mini-helpdesk/
 │       ├── 0005_live_sync.sql        # publish tickets + comments to Realtime
 │       ├── 0006_account_deletion.sql # guarded, audited account deletion RPC
 │       ├── 0007_account_deletion_hardening.sql  # idempotent forward-fix of 0006
-│       └── 0008_ticket_workspace.sql          # assignments, queue and overview
+│       ├── 0008_ticket_workspace.sql          # assignments, queue and overview
+│       ├── 0009_queue_triage.sql              # priorities and queue ordering
+│       ├── 0010_audit_activity.sql            # searchable audit history
+│       └── 0011_staff_notes.sql               # private staff handoffs
 ├── electron/
 │   ├── main.cjs              # hardened main process (window, CSP, APP_MODE, nav guards)
 │   └── preload.cjs           # minimal contextBridge - the only renderer↔main bridge
@@ -576,7 +589,7 @@ mini-helpdesk/
 │   │   ├── ui/                 # buttons, fields, modals, badges - shared primitives
 │   │   ├── layout/            # sidebar, top bar, notification bell
 │   │   ├── tickets/            # ticket card, status/priority pills, comment thread, modals
-│   │   └── staff/              # stats cards, tickets queue table, audit log table
+│   │   └── staff/              # staff audit history presentation
 │   ├── pages/                 # one file per route
 │   └── lib/                    # Supabase client, formatting helpers, shared constants
 ├── vite.config.js            # dual web/desktop base + strict-CSP injection

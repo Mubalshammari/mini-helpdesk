@@ -63,17 +63,23 @@ tickets = [
         "description": "Conference room display drops the HDMI connection.",
         "category": "hardware",
         "status": ["open", "in_progress", "resolved", "closed"][i % 4],
-        "priority": ["high", "medium", "low"][i % 3],
+        "priority": "urgent" if i in (4, 5, 6) else ["high", "medium", "low"][i % 3],
         "user_id": me,
         "assigned_to": None,
         "assignee": None,
         "requester": "Salem Ahmad",
-        "created_at": created,
-        "updated_at": created,
+        "created_at": (
+            datetime.datetime.fromisoformat(created) - datetime.timedelta(hours=i + 1)
+        ).isoformat(),
+        "updated_at": (
+            datetime.datetime.fromisoformat(created) - datetime.timedelta(minutes=i)
+        ).isoformat(),
     }
     for i in range(26)
 ]
 comments = []
+staff_notes = []
+note_requests = []
 with tempfile.TemporaryDirectory(prefix="desk-web-") as build, sync_playwright() as p:
     subprocess.run(
         ["npm", "run", "build", "--", "--outDir", build],
@@ -107,12 +113,45 @@ with tempfile.TemporaryDirectory(prefix="desk-web-") as build, sync_playwright()
             "role": role,
             "created_at": created,
         }
+        headers = {}
         if req.method == "OPTIONS":
             data = {}
         elif path == "user":
             data = user
         elif path == "profiles":
-            data = profile if "id" in q else [profile]
+            if "id" in q:
+                data = profile
+            else:
+                people = [
+                    profile,
+                    *[
+                        dict(
+                            profile,
+                            id=str(uuid.UUID(int=i + 1)),
+                            full_name=f"Technician {i:02d}",
+                            role="it",
+                        )
+                        for i in range(13)
+                    ],
+                ]
+                if "role" in q:
+                    people = [
+                        member
+                        for member in people
+                        if member["role"] == q["role"][0].removeprefix("eq.")
+                    ]
+                if "full_name" in q:
+                    term = q["full_name"][0].removeprefix("imatch.***=").lower()
+                    people = [
+                        member
+                        for member in people
+                        if term in member["full_name"].lower()
+                    ]
+                start = int(q.get("offset", ["0"])[0])
+                data = people[start : start + int(q.get("limit", ["12"])[0])]
+                headers["content-range"] = (
+                    f"{start}-{start + len(data) - 1}/{len(people)}" if data else "*/0"
+                )
         elif path == "ticket_overview":
             data = {
                 s: sum(t["status"] == s for t in tickets)
@@ -123,15 +162,40 @@ with tempfile.TemporaryDirectory(prefix="desk-web-") as build, sync_playwright()
             rows = [
                 t
                 for t in tickets
-                if (
-                    not body["p_search"]
-                    or body["p_search"].lower() in t["title"].lower()
+                if any(
+                    body["p_search"].casefold() in t[field].casefold()
+                    for field in ("title", "description", "requester")
                 )
                 and (not body["p_status"] or t["status"] == body["p_status"])
                 and (not body["p_category"] or t["category"] == body["p_category"])
+                and (not body["p_priority"] or t["priority"] == body["p_priority"])
                 and (body["p_scope"] != "mine" or t["assigned_to"] == me)
-                and (body["p_scope"] != "unassigned" or t["assigned_to"] is None)
+                and (
+                    body["p_scope"] != "unassigned"
+                    or (
+                        t["assigned_to"] is None
+                        and t["status"] in ("open", "in_progress")
+                    )
+                )
+                and (
+                    body["p_scope"] != "urgent"
+                    or (
+                        t["priority"] == "urgent"
+                        and t["status"] in ("open", "in_progress")
+                    )
+                )
             ]
+            rows.sort(key=lambda t: t["updated_at"], reverse=True)
+            if body["p_sort"] == "priority":
+                rank = {"urgent": 0, "high": 1, "medium": 2, "low": 3}
+                rows.sort(key=lambda t: rank[t["priority"]])
+            elif body["p_sort"] == "oldest":
+                rows.sort(
+                    key=lambda t: (
+                        t["status"] not in ("open", "in_progress"),
+                        t["created_at"],
+                    )
+                )
             page = max(1, min((len(rows) + 19) // 20, body["p_page"]))
             data = {
                 "total": len(rows),
@@ -154,6 +218,40 @@ with tempfile.TemporaryDirectory(prefix="desk-web-") as build, sync_playwright()
                 or "vnd.pgrst.object" in req.headers.get("accept", "")
                 else [detail]
             )
+        elif path == "audit_activity":
+            changes = [
+                {
+                    "id": "ev1",
+                    "created_at": created,
+                    "kind": "access",
+                    "action": "role_changed",
+                    "ticket_id": None,
+                    "subject": "On-call engineer",
+                    "actor": "Access manager",
+                    "before": "employee",
+                    "after": "it",
+                }
+            ]
+            if body["p_kind"] not in ("all", "access") or (
+                body["p_search"] and body["p_search"].lower() not in "on-call engineer"
+            ):
+                changes = []
+            data = {"rows": changes, "page": 1, "total": len(changes)}
+        elif path == "ticket_staff_notes":
+            note_requests.append(role)
+            data = staff_notes
+        elif path == "add_staff_note":
+            assert role in ("it", "admin")
+            staff_notes.insert(
+                0,
+                {
+                    "id": body["p_note"],
+                    "created_at": created,
+                    "body": body["p_body"],
+                    "author": profile,
+                },
+            )
+            data = body["p_note"]
         elif path == "claim_ticket":
             ticket = next(t for t in tickets if t["id"] == body["p_ticket"])
             ticket.update(assigned_to=me, assignee="Mubarak Alshammari")
@@ -175,6 +273,8 @@ with tempfile.TemporaryDirectory(prefix="desk-web-") as build, sync_playwright()
             status=200,
             json=data,
             headers={
+                **headers,
+                "access-control-expose-headers": "content-range",
                 "access-control-allow-origin": "*",
                 "access-control-allow-headers": "*",
                 "access-control-allow-methods": "*",
@@ -211,6 +311,19 @@ with tempfile.TemporaryDirectory(prefix="desk-web-") as build, sync_playwright()
     expect(page.get_by_text("26 total")).to_be_visible()
     page.get_by_role("link", name="Ticket queue", exact=True).click()
     expect(page.locator(".ticket-row")).to_have_count(20)
+    page.get_by_role("button", name="Urgent & active").click()
+    expect(page.locator(".ticket-row")).to_have_count(2)
+    page.get_by_label("Sort tickets").select_option("oldest")
+    expect(page.locator(".ticket-row").first).to_contain_text(names[0])
+    page.get_by_role("button", name="All tickets", exact=True).click()
+    page.get_by_label("Sort tickets").select_option("priority")
+    expect(page.locator(".ticket-row").first).to_contain_text("Urgent")
+    page.get_by_role("button", name="Filters", exact=True).click()
+    page.get_by_label("Priority", exact=True).select_option("urgent")
+    expect(page.locator(".ticket-row")).to_have_count(3)
+    page.get_by_role("button", name="Clear filters").click()
+    page.get_by_label("Sort tickets").select_option("recent")
+    expect(page.locator(".ticket-row")).to_have_count(20)
     page.get_by_label("Next page").click()
     expect(page.locator(".ticket-row")).to_have_count(6)
     page.get_by_label("Search tickets").fill("Scanner")
@@ -222,6 +335,15 @@ with tempfile.TemporaryDirectory(prefix="desk-web-") as build, sync_playwright()
     page.get_by_role("button", name="Claim ticket").click()
     expect(page.locator(".assignment strong")).to_have_text("Mubarak Alshammari")
     page.get_by_label("Write a reply").fill("Checking the dock now.")
+    page.get_by_role("tab", name="Internal notes").click()
+    page.get_by_label("Add an internal note").fill("Hand off to the next shift.")
+    page.get_by_role("button", name="Add note", exact=True).click()
+    expect(page.get_by_text("Hand off to the next shift.", exact=True)).to_be_visible()
+    page.get_by_role("tab", name="Replies").click()
+    expect(
+        page.get_by_text("Hand off to the next shift.", exact=True)
+    ).not_to_be_visible()
+    expect(page.get_by_label("Write a reply")).to_have_value("Checking the dock now.")
     page.get_by_role("button", name="Reply", exact=True).click()
     expect(page.get_by_text("Checking the dock now.")).to_be_visible()
     page.get_by_role("group", name="Ticket status").get_by_role(
@@ -241,10 +363,39 @@ with tempfile.TemporaryDirectory(prefix="desk-web-") as build, sync_playwright()
     expect(page.locator("html")).to_have_class("dark")
     page.get_by_role("link", name="Audit trail").click()
     expect(page.get_by_role("heading", name="Audit trail")).to_be_visible()
+    expect(page.get_by_text("On-call engineer")).to_be_visible()
+    page.get_by_label("Activity type").select_option("account")
+    expect(page.get_by_role("heading", name="No matching activity")).to_be_visible()
     page.get_by_role("link", name="Team directory").click()
     expect(page.get_by_role("heading", name="Team directory")).to_be_visible()
+    page.get_by_label("Next directory page").click()
+    expect(page.get_by_text("Technician 12", exact=True)).to_be_visible()
+    page.get_by_label("Filter by role").select_option("it")
+    page.get_by_label("Search team members").fill("Technician 01")
+    expect(page.get_by_text("Technician 01", exact=True)).to_be_visible()
+    expect(page.get_by_text("Technician 02", exact=True)).to_have_count(0)
     page.get_by_role("button", name="New ticket", exact=True).click()
-    expect(page.get_by_role("dialog")).to_be_visible()
+    form = page.get_by_role("dialog", name="New ticket")
+    expect(form).to_be_visible()
+    form.get_by_text("Network", exact=True).click()
+    expect(form.get_by_role("radio", name="Network")).to_be_checked()
+    expect(form.get_by_label("Title")).to_have_attribute(
+        "placeholder", "Office Wi-Fi drops during calls"
+    )
+    form.get_by_label("Priority").select_option("high")
+    expect(
+        form.get_by_text("Someone is blocked from completing important work.")
+    ).to_be_visible()
+    form.get_by_role("button", name="Create ticket").click()
+    expect(form.get_by_label("Title")).to_be_focused()
+    expect(
+        form.get_by_text("Use 10 to 2,000 characters to describe the request.")
+    ).to_be_visible()
+    page.get_by_role("radio", name="Network").check()
+    page.get_by_label("Priority").select_option("urgent")
+    expect(
+        page.get_by_text("An essential service is down or several people are blocked.")
+    ).to_be_visible()
     page.keyboard.press("Escape")
     expect(page.get_by_role("dialog")).to_have_count(0)
     page.set_viewport_size({"width": 390, "height": 844})
@@ -274,6 +425,7 @@ with tempfile.TemporaryDirectory(prefix="desk-web-") as build, sync_playwright()
         )
         == "none"
     )
+    assert "employee" not in note_requests and "admin" in note_requests
     assert not errors, errors
     print(
         "PASS: sign-up view, dashboard, 20-row pagination, search, detail, claim, reply, scope, dark mode, audit, users, dialogs, employee mobile navigation, mobile overflow."
