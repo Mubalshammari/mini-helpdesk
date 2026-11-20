@@ -1,184 +1,206 @@
-import { useMemo } from 'react'
+import { useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Plus, Ticket as TicketIcon } from '@phosphor-icons/react'
+import {
+  ArrowRight,
+  ArrowUpRight,
+  CalendarBlank,
+  CheckCircle,
+  CircleNotch,
+  Lightning,
+  Stack,
+  Ticket,
+  Tray,
+  UserCircle,
+} from '@phosphor-icons/react'
 import AppShell from '../components/layout/AppShell'
+import StatusBadge, { STATUS_META } from '../components/ui/StatusBadge'
 import { useAuth } from '../context/AuthContext'
-import { useNewTicket } from '../context/NewTicketContext'
-import { useTickets } from '../hooks/useTickets'
-import { useAdminTickets } from '../hooks/useAdminTickets'
 import { usePageTitle } from '../hooks/usePageTitle'
-import { useRefreshable } from '../context/RefreshContext'
-import StatsCards from '../components/staff/StatsCards'
-import StatusBadge from '../components/ui/StatusBadge'
-import Button from '../components/ui/Button'
-import EmptyState from '../components/ui/EmptyState'
+import { useWorkspaceQuery } from '../hooks/useWorkspaceQuery'
+import { supabase } from '../lib/supabaseClient'
 import { formatRelative } from '../lib/format'
 
-function isToday(iso) {
-  const d = new Date(iso)
-  const now = new Date()
-  return (
-    d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
-  )
+const statuses = ['open', 'in_progress', 'resolved', 'closed']
+const count = new Intl.NumberFormat()
+const calendarDate = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+})
+
+function displayCount(value) {
+  return value == null ? '…' : count.format(value)
 }
 
-function RecentTicketsList({ tickets, emptyDescription }) {
-  if (tickets.length === 0) {
-    return <EmptyState icon={TicketIcon} title="Nothing here yet" description={emptyDescription} />
-  }
+function Summary({ data, isStaff }) {
+  const waitingCount = isStaff ? data?.unassigned : data?.open
+  const focusRoute = isStaff ? '/tickets?scope=unassigned&sort=oldest' : '/tickets?status=open'
 
   return (
-    <div className="overflow-hidden rounded-xl border border-stone-200 bg-white dark:border-stone-700 dark:bg-stone-800">
-      <ol className="divide-y divide-stone-100 dark:divide-stone-700">
-        {tickets.map((ticket) => (
-          <li key={ticket.id}>
-            <Link
-              to={`/tickets/${ticket.id}`}
-              className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-stone-50 dark:hover:bg-stone-700/50"
-            >
-              <StatusBadge status={ticket.status} size="sm" />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-900 dark:text-stone-100">
-                {ticket.title}
-              </span>
-              <time dateTime={ticket.created_at} className="shrink-0 text-xs text-stone-400 dark:text-stone-500">
-                {formatRelative(ticket.created_at)}
-              </time>
-            </Link>
-          </li>
-        ))}
-      </ol>
-    </div>
-  )
-}
-
-function StaffDashboard() {
-  const { tickets, loading, refetch } = useAdminTickets()
-  useRefreshable('dashboard-staff', refetch)
-
-  const stats = useMemo(
-    () => ({
-      open: tickets.filter((t) => t.status === 'open').length,
-      inProgress: tickets.filter((t) => t.status === 'in_progress').length,
-      resolved: tickets.filter((t) => t.status === 'resolved').length,
-      today: tickets.filter((t) => isToday(t.created_at)).length,
-    }),
-    [tickets]
-  )
-
-  return (
-    <>
-      <StatsCards stats={stats} loading={loading} />
-
-      <div className="mt-8 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">Latest tickets</h2>
-        <Link
-          to="/tickets"
-          className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-        >
-          View all
-          <ArrowRight size={14} weight="bold" />
+    <section className="desk-summary" aria-label="Ticket summary">
+      <div className="summary-focus">
+        <div className="focus-stamp" aria-hidden="true">
+          <Tray weight="duotone" />
+        </div>
+        <div className="summary-label">
+          <Tray size={18} />
+          {isStaff ? 'Awaiting assignment' : 'Open requests'}
+        </div>
+        <p className="summary-value">{displayCount(waitingCount)}</p>
+        <Link to={focusRoute} className="focus-action">
+          {isStaff ? 'View unassigned' : 'View open requests'} <ArrowRight weight="bold" />
         </Link>
       </div>
-      <div className="mt-3">
-        {loading ? (
-          <div className="h-56 animate-pulse rounded-xl bg-stone-100 dark:bg-stone-800" />
-        ) : (
-          <RecentTicketsList
-            tickets={tickets.slice(0, 5)}
-            emptyDescription="New tickets from across the company will show up here."
-          />
-        )}
+      <Link className="summary-stat" to="/tickets?status=in_progress">
+        <span className="stat-symbol progress-symbol">
+          <Stack size={21} weight="duotone" />
+        </span>
+        <span className="summary-label">In progress</span>
+        <strong className="summary-value">{displayCount(data?.in_progress)}</strong>
+        <span className="stat-caption">
+          View in progress <ArrowUpRight />
+        </span>
+      </Link>
+      <div className="summary-stat">
+        <span className="stat-symbol today-symbol">
+          <CalendarBlank size={21} weight="duotone" />
+        </span>
+        <span className="summary-label">Opened today</span>
+        <strong className="summary-value">{displayCount(data?.today)}</strong>
+        <span className="stat-caption">Since local midnight</span>
       </div>
-    </>
+    </section>
   )
 }
 
-function EmployeeDashboard() {
-  const { openNewTicket } = useNewTicket()
-  const { tickets, loading, refetch } = useTickets()
-  useRefreshable('dashboard-own', refetch)
-
-  const counts = useMemo(
-    () => ({
-      open: tickets.filter((t) => t.status === 'open').length,
-      inProgress: tickets.filter((t) => t.status === 'in_progress').length,
-      resolved: tickets.filter((t) => t.status === 'resolved').length,
-    }),
-    [tickets]
-  )
-
-  const cards = [
-    { label: 'Open', value: counts.open, className: 'text-sky-600 dark:text-sky-400' },
-    { label: 'In progress', value: counts.inProgress, className: 'text-amber-600 dark:text-amber-400' },
-    { label: 'Resolved', value: counts.resolved, className: 'text-emerald-600 dark:text-emerald-400' },
-  ]
-
+function Workload({ data }) {
+  const total = statuses.reduce((sum, status) => sum + (data?.[status] ?? 0), 0)
   return (
-    <>
-      <div className="grid grid-cols-3 gap-3">
-        {cards.map((card) => (
-          <div
-            key={card.label}
-            className="rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-700 dark:bg-stone-800"
-          >
-            <p className="text-xs font-medium text-stone-500 dark:text-stone-400">{card.label}</p>
-            {loading ? (
-              <div className="mt-2 h-7 w-10 animate-pulse rounded-md bg-stone-200 dark:bg-stone-700" />
-            ) : (
-              <p className={`mt-1 text-2xl font-semibold ${card.className}`}>{card.value}</p>
-            )}
-          </div>
-        ))}
+    <section className="overview-panel workload-panel" aria-labelledby="workload-title">
+      <div className="overview-section-title">
+        <h2 id="workload-title">Workload by status</h2>
+        <span className="panel-total">{displayCount(data ? total : null)} total</span>
       </div>
+      <ul className="status-distribution">
+        {statuses.map((status) => {
+          const value = data?.[status] ?? 0
+          return (
+            <li key={status}>
+              <Link to={'/tickets?status=' + status} className={'distribution-row is-' + status}>
+                <span className="distribution-label">{STATUS_META[status].label}</span>
+                <strong>{displayCount(data?.[status])}</strong>
+                <span className="distribution-track" aria-hidden="true">
+                  <span style={{ width: (total ? (value / total) * 100 : 0) + '%' }} />
+                </span>
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
 
-      <div className="mt-8 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">Your latest tickets</h2>
-        <Link
-          to="/tickets"
-          className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-        >
-          View all
-          <ArrowRight size={14} weight="bold" />
+function RecentActivity({ tickets }) {
+  return (
+    <section className="overview-panel recent-panel" aria-labelledby="recent-title">
+      <div className="overview-section-title">
+        <h2 id="recent-title">Recent activity</h2>
+        <Link className="overview-text-link" to="/tickets">
+          View tickets <ArrowRight size={15} />
         </Link>
       </div>
-      <div className="mt-3">
-        {loading ? (
-          <div className="h-56 animate-pulse rounded-xl bg-stone-100 dark:bg-stone-800" />
-        ) : tickets.length === 0 ? (
-          <EmptyState
-            icon={TicketIcon}
-            title="No tickets yet"
-            description="When something needs IT's attention, file a ticket and track it here."
-            action={
-              <Button onClick={openNewTicket}>
-                <Plus size={16} weight="bold" />
-                Create your first ticket
-              </Button>
-            }
-          />
-        ) : (
-          <RecentTicketsList tickets={tickets.slice(0, 5)} emptyDescription="" />
-        )}
-      </div>
-    </>
+      {tickets === undefined ? (
+        <p role="status" className="activity-empty">
+          <CircleNotch size={20} /> Loading activity…
+        </p>
+      ) : tickets.length === 0 ? (
+        <div className="activity-empty">
+          <CheckCircle size={24} weight="duotone" />
+          New tickets and replies will appear here.
+        </div>
+      ) : (
+        <ul className="recent-tickets">
+          {tickets.map((ticket) => (
+            <li key={ticket.id}>
+              <Link to={'/tickets/' + ticket.id}>
+                <span className={'ticket-glyph priority-' + ticket.priority} aria-hidden="true">
+                  <Ticket size={19} />
+                </span>
+                <span className="recent-ticket-name">
+                  <strong>{ticket.title}</strong>
+                  <small>{ticket.priority} priority</small>
+                </span>
+                <StatusBadge status={ticket.status} size="sm" />
+                <time dateTime={ticket.updated_at}>{formatRelative(ticket.updated_at)}</time>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function QueueShortcuts() {
+  return (
+    <nav aria-label="Staff queue shortcuts" className="queue-shortcuts">
+      <Link to="/tickets?scope=urgent">
+        <Lightning weight="fill" size={17} />
+        Urgent tickets
+        <ArrowUpRight size={14} />
+      </Link>
+      <Link to="/tickets?scope=mine">
+        <UserCircle size={18} />
+        Assigned to me
+        <ArrowUpRight size={14} />
+      </Link>
+    </nav>
   )
 }
 
 export default function DashboardPage() {
-  usePageTitle('Dashboard')
-  const { profile, isStaff } = useAuth()
+  usePageTitle('Overview')
+  const { isStaff } = useAuth()
+  const read = useCallback(() => {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
+    return supabase.rpc('ticket_overview', {
+      p_day_start: start.toISOString(),
+      p_day_end: end.toISOString(),
+    })
+  }, [])
+  const { data, error, refresh } = useWorkspaceQuery('overview', read)
 
   return (
     <AppShell>
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
-          Welcome back, {profile?.full_name?.split(' ')[0] || 'there'}
-        </h1>
-        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          {isStaff ? "Here's where the queue stands." : "Here's where your requests stand."}
-        </p>
+      <div className="operations-overview">
+        <header className="overview-masthead">
+          <h1>{isStaff ? 'Support overview' : 'My overview'}</h1>
+          <span className="overview-date">
+            <CalendarBlank size={16} />
+            {calendarDate.format(new Date())}
+          </span>
+        </header>
+        {error ? (
+          <div className="sheet notice" role="alert">
+            Couldn’t load the overview. <button onClick={refresh}>Try again</button>
+          </div>
+        ) : (
+          <>
+            <Summary data={data} isStaff={isStaff} />
+            <div className="overview-details">
+              <RecentActivity tickets={data?.recent} />
+              <div className="workload-column">
+                <Workload data={data} />
+                {isStaff && <QueueShortcuts />}
+              </div>
+            </div>
+          </>
+        )}
       </div>
-      <div className="mt-6">{isStaff ? <StaffDashboard /> : <EmployeeDashboard />}</div>
     </AppShell>
   )
 }

@@ -1,55 +1,90 @@
-import { useMemo, useState } from 'react'
-import { MagnifyingGlass, Trash } from '@phosphor-icons/react'
+import { useEffect, useState } from 'react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  MagnifyingGlass,
+  SlidersHorizontal,
+  Trash,
+  UsersThree,
+} from '@phosphor-icons/react'
 import AppShell from '../components/layout/AppShell'
+import Avatar from '../components/ui/Avatar'
+import Button from '../components/ui/Button'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
+import EmptyState from '../components/ui/EmptyState'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { useUsers } from '../hooks/useUsers'
+import { useUsers, DIRECTORY_PAGE_SIZE } from '../hooks/useUsers'
 import { usePageTitle } from '../hooks/usePageTitle'
-import { useRefreshable } from '../context/RefreshContext'
-import Avatar from '../components/ui/Avatar'
-import EmptyState from '../components/ui/EmptyState'
-import ConfirmDialog from '../components/ui/ConfirmDialog'
 import { ROLES, ROLE_LABELS } from '../lib/constants'
 import { formatDate } from '../lib/format'
+import './directory.css'
 
-const selectClasses =
-  'rounded-md border border-stone-200 bg-white px-2 py-1 text-xs font-medium text-stone-700 transition-colors hover:border-stone-300 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-200'
+function describeRoleChange(role) {
+  if (role === 'admin') return 'This person will be able to manage team access and delete accounts.'
+  if (role === 'employee')
+    return 'Their assigned tickets return to the queue. This person keeps access to requests they submitted.'
+  return 'This person will be able to claim and manage support tickets. Only administrators can change team access.'
+}
+
+const firstPage = { name: '', role: '', page: 1 }
 
 export default function ManageUsersPage() {
-  usePageTitle('Manage users')
+  usePageTitle('Team directory')
   const { user } = useAuth()
   const { showToast } = useToast()
-  const { users, loading, refetch, changeRole, deleteUser } = useUsers()
-  useRefreshable('users', refetch)
-  const [search, setSearch] = useState('')
-  const [pendingChange, setPendingChange] = useState(null) // { targetUser, newRole }
-  const [pendingDelete, setPendingDelete] = useState(null) // targetUser
+  const [name, setName] = useState('')
+  const [filters, setFilters] = useState(firstPage)
+  const [pendingChange, setPendingChange] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const { data, error, refresh, changeRole, deleteUser } = useUsers(filters)
+  const hasFilters = Boolean(filters.role || filters.name)
+  const page = filters.page
+  const start = (page - 1) * DIRECTORY_PAGE_SIZE
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return users
-    return users.filter((u) => (u.full_name || '').toLowerCase().includes(q))
-  }, [users, search])
+  useEffect(() => {
+    const term = name.trim()
+    if (term === filters.name) return
+    const timer = window.setTimeout(
+      () => setFilters((current) => ({ ...current, name: term, page: 1 })),
+      200
+    )
+    return () => window.clearTimeout(timer)
+  }, [name, filters.name])
 
-  async function handleConfirm() {
-    const { targetUser, newRole } = pendingChange
+  // A deletion or role change may remove the last member on this page.
+  useEffect(() => {
+    if (data && page > 1 && start >= data.total) {
+      setFilters((current) => ({
+        ...current,
+        page: Math.max(1, Math.ceil(data.total / DIRECTORY_PAGE_SIZE)),
+      }))
+    }
+  }, [data, page, start])
+
+  function resetFilters() {
+    setName('')
+    setFilters(firstPage)
+  }
+
+  async function confirmRoleChange() {
+    const { member, role } = pendingChange
     try {
-      await changeRole(targetUser.id, newRole)
-      showToast(`${targetUser.full_name || 'User'} is now ${ROLE_LABELS[newRole]}.`, 'success')
-    } catch (err) {
-      showToast(err.message ?? 'Could not change this user’s role.', 'error')
+      await changeRole(member.id, role)
+      showToast(`${member.full_name || 'Member'} now has ${ROLE_LABELS[role]} access.`, 'success')
+    } catch (error) {
+      showToast(error.message || 'Could not change this member’s access.', 'error')
     } finally {
       setPendingChange(null)
     }
   }
 
-  async function handleDeleteConfirm() {
-    const targetUser = pendingDelete
+  async function confirmDeletion() {
     try {
-      await deleteUser(targetUser.id)
-      showToast(`${targetUser.full_name || 'User'}'s account was deleted.`, 'success')
-    } catch (err) {
-      showToast(err.message ?? 'Could not delete this account.', 'error')
+      await deleteUser(pendingDelete.id)
+      showToast('Account deleted.', 'success')
+    } catch (error) {
+      showToast(error.message || 'Could not delete this account.', 'error')
     } finally {
       setPendingDelete(null)
     }
@@ -57,139 +92,185 @@ export default function ManageUsersPage() {
 
   return (
     <AppShell>
-      <p className="text-sm text-stone-500 dark:text-stone-400">
-        Change who has IT or admin access. Every change is recorded in the role history.
-      </p>
-
-      <div className="mt-5 relative max-w-sm">
-        <MagnifyingGlass
-          size={16}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
-        />
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name"
-          className="w-full rounded-lg border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm text-stone-900 placeholder:text-stone-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
-        />
+      <div className="page-intro directory-intro">
+        <h1>Team directory</h1>
+        <p>Find a colleague and manage their access to the support desk.</p>
       </div>
-
-      <div className="mt-4 overflow-x-auto rounded-xl border border-stone-200 dark:border-stone-700">
-        <table className="w-full min-w-[520px] text-left text-sm">
-          <thead className="border-b border-stone-200 bg-stone-50 text-xs font-medium uppercase tracking-wide text-stone-500 dark:border-stone-700 dark:bg-stone-800/60 dark:text-stone-400">
-            <tr>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Joined</th>
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">
-                <span className="sr-only">Actions</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-stone-100 dark:divide-stone-700">
-            {loading &&
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i}>
-                  <td colSpan={4} className="px-4 py-4">
-                    <div className="h-4 w-full animate-pulse rounded bg-stone-100 dark:bg-stone-700" />
-                  </td>
-                </tr>
+      <section className="sheet directory-panel" aria-label="Team members">
+        <div className="directory-filters">
+          <label className="directory-search">
+            <MagnifyingGlass size={19} aria-hidden="true" />
+            <input
+              type="search"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Search by name"
+              aria-label="Search team members"
+            />
+          </label>
+          <label className="directory-role-filter">
+            <SlidersHorizontal size={17} aria-hidden="true" />
+            <select
+              aria-label="Filter by role"
+              value={filters.role}
+              onChange={(event) => setFilters({ name: name.trim(), role: event.target.value, page: 1 })}
+            >
+              <option value="">All roles</option>
+              {ROLES.map((role) => (
+                <option key={role.value} value={role.value}>
+                  {role.label}
+                </option>
               ))}
-
-            {!loading &&
-              filtered.map((u) => {
-                const isSelf = u.id === user.id
-                // Mirrors the server rule in delete_user_account(): admins
-                // can't be deleted directly - demote first. Disabling the
-                // button here means the UI never offers an action the RPC
-                // would reject.
-                const isAdminTarget = u.role === 'admin'
-                const deleteDisabled = isSelf || isAdminTarget
-                const deleteTitle = isSelf
-                  ? "You can't delete your own account."
-                  : isAdminTarget
-                    ? 'Change this admin to employee or IT first, then delete.'
-                    : 'Delete account'
-                return (
-                  <tr key={u.id} className="transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/60">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Avatar name={u.full_name} size={24} />
-                        <span className="text-stone-700 dark:text-stone-300">{u.full_name || 'Unnamed user'}</span>
-                        {isSelf && (
-                          <span className="rounded-full bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-500 dark:bg-stone-700 dark:text-stone-400">
-                            You
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-stone-500 dark:text-stone-400">
-                      {formatDate(u.created_at)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={u.role}
-                        disabled={isSelf}
-                        title={isSelf ? "You can't change your own role." : undefined}
-                        onChange={(e) => setPendingChange({ targetUser: u, newRole: e.target.value })}
-                        className={selectClasses}
-                        aria-label={`Change role for ${u.full_name || 'user'}`}
-                      >
-                        {ROLES.map((r) => (
-                          <option key={r.value} value={r.value}>
-                            {r.label}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        disabled={deleteDisabled}
-                        onClick={() => setPendingDelete(u)}
-                        aria-label={`Delete ${u.full_name || 'user'}'s account`}
-                        title={deleteTitle}
-                        className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-stone-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
-                      >
-                        <Trash size={15} weight="regular" />
-                      </button>
-                    </td>
-                  </tr>
+            </select>
+          </label>
+        </div>
+        {error ? (
+          <div className="directory-message" role="alert">
+            <p>Couldn’t load the directory.</p>
+            <Button variant="secondary" size="sm" onClick={refresh}>
+              Try again
+            </Button>
+          </div>
+        ) : !data ? (
+          <p className="directory-message" role="status">
+            Loading team members…
+          </p>
+        ) : data.total === 0 ? (
+          <div className="directory-empty">
+            <EmptyState
+              icon={hasFilters ? MagnifyingGlass : UsersThree}
+              title={hasFilters ? 'No matching members' : 'No team members yet'}
+              description={
+                hasFilters ? 'Try another name or role.' : 'Accounts appear here after sign-up.'
+              }
+              action={
+                hasFilters && (
+                  <Button variant="secondary" size="sm" onClick={resetFilters}>
+                    Clear filters
+                  </Button>
                 )
-              })}
-          </tbody>
-        </table>
-
-        {!loading && filtered.length === 0 && (
-          <EmptyState icon={MagnifyingGlass} title="No users match" description="Try a different search term." />
+              }
+            />
+          </div>
+        ) : (
+          <>
+            <table className="directory-table">
+              <caption className="sr-only">Team members, access roles and account actions</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Team member</th>
+                  <th scope="col">Joined</th>
+                  <th scope="col">Access role</th>
+                  <th scope="col">
+                    <span className="sr-only">Account actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.members.map((member) => {
+                  const self = member.id === user.id
+                  const label = member.full_name || 'Unnamed member'
+                  const protectedAccount = self || member.role === 'admin'
+                  return (
+                    <tr key={member.id}>
+                      <th scope="row">
+                        <div className="directory-person">
+                          <Avatar name={member.full_name} size={36} />
+                          <div>
+                            <strong>{label}</strong>
+                            {self && <span>Your account</span>}
+                          </div>
+                        </div>
+                      </th>
+                      <td className="directory-joined">
+                        <time dateTime={member.created_at}>{formatDate(member.created_at)}</time>
+                      </td>
+                      <td className="directory-access">
+                        <select
+                          aria-label={'Change role for ' + label}
+                          value={member.role}
+                          disabled={self}
+                          onChange={(event) => setPendingChange({ member, role: event.target.value })}
+                        >
+                          {ROLES.map((role) => (
+                            <option key={role.value} value={role.value}>
+                              {role.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="directory-actions">
+                        <button
+                          type="button"
+                          disabled={protectedAccount}
+                          title={
+                            self
+                              ? 'Your own account is protected'
+                              : protectedAccount
+                                ? 'Change the administrator role before deleting this account'
+                                : 'Delete account'
+                          }
+                          aria-label={'Delete account for ' + label}
+                          onClick={() => setPendingDelete(member)}
+                        >
+                          <Trash size={18} aria-hidden="true" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            <nav className="directory-pagination" aria-label="Directory pages">
+              <p aria-live="polite">
+                {start + 1}–{Math.min(start + data.members.length, data.total)} of {data.total}{' '}
+                {data.total === 1 ? 'member' : 'members'}
+              </p>
+              <div>
+                <button
+                  type="button"
+                  aria-label="Previous directory page"
+                  disabled={page === 1}
+                  onClick={() => setFilters((current) => ({ ...current, page: current.page - 1 }))}
+                >
+                  <ArrowLeft />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next directory page"
+                  disabled={start + DIRECTORY_PAGE_SIZE >= data.total}
+                  onClick={() => setFilters((current) => ({ ...current, page: current.page + 1 }))}
+                >
+                  <ArrowRight />
+                </button>
+              </div>
+            </nav>
+          </>
         )}
-      </div>
-
+      </section>
       <ConfirmDialog
         open={Boolean(pendingChange)}
         onCancel={() => setPendingChange(null)}
-        onConfirm={handleConfirm}
+        onConfirm={confirmRoleChange}
         title={
           pendingChange
-            ? `Make ${pendingChange.targetUser.full_name || 'this user'} ${ROLE_LABELS[pendingChange.newRole]}?`
+            ? `Give ${pendingChange.member.full_name || 'this member'} ${ROLE_LABELS[pendingChange.role]} access?`
             : ''
         }
-        description={
-          pendingChange?.newRole === 'admin'
-            ? 'Admins can manage every user’s role, including granting or revoking admin access.'
-            : 'This takes effect immediately.'
-        }
+        description={pendingChange ? describeRoleChange(pendingChange.role) : ''}
         confirmLabel="Change role"
-        variant={pendingChange?.newRole === 'admin' ? 'danger' : 'primary'}
+        variant={pendingChange?.role === 'admin' ? 'danger' : 'primary'}
       />
-
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         onCancel={() => setPendingDelete(null)}
-        onConfirm={handleDeleteConfirm}
-        title={pendingDelete ? `Permanently delete ${pendingDelete.full_name || 'this user'}'s account?` : ''}
-        description="Their login, every ticket they filed, and every reply they wrote are deleted permanently. A record of the deletion (who, when) is kept in the audit log. This cannot be undone."
+        onConfirm={confirmDeletion}
+        title={
+          pendingDelete
+            ? `Permanently delete ${pendingDelete.full_name || 'this member'}’s account?`
+            : ''
+        }
+        description="This deletes their login, submitted tickets and replies. Tickets assigned to them return to the queue. The deletion is recorded in the audit trail."
         confirmLabel="Delete account"
         variant="danger"
       />

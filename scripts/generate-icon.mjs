@@ -1,5 +1,5 @@
 // Generates build/icon.png - the Windows app icon for electron-builder.
-// No image dependencies: it rasterizes a simple brand mark (indigo rounded
+// No image dependencies: it rasterizes a simple brand mark (green rounded
 // tile with a white ring, echoing the in-app headset badge's color) straight
 // to RGBA pixels and encodes a valid PNG with Node's built-in zlib.
 //
@@ -11,7 +11,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const SIZE = 512
-const INDIGO = [79, 70, 229] // #4f46e5
+const GREEN = [34, 91, 70]
 const WHITE = [255, 255, 255]
 
 function lerp(a, b, t) {
@@ -64,9 +64,9 @@ for (let y = 0; y < SIZE; y++) {
     let a = 0
     if (tileCov > 0) {
       // base tile is indigo; the ring paints white over it
-      r = lerp(INDIGO[0], WHITE[0], ringCov)
-      g = lerp(INDIGO[1], WHITE[1], ringCov)
-      b = lerp(INDIGO[2], WHITE[2], ringCov)
+      r = lerp(GREEN[0], WHITE[0], ringCov)
+      g = lerp(GREEN[1], WHITE[1], ringCov)
+      b = lerp(GREEN[2], WHITE[2], ringCov)
       a = Math.round(255 * tileCov)
     }
     const p = rowStart + 1 + x * 4

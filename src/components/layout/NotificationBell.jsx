@@ -19,8 +19,18 @@ export default function NotificationBell() {
     function onClickOutside(e) {
       if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false)
     }
+    function onKeyDown(event) {
+      if (event.key === 'Escape' && panelRef.current?.contains(document.activeElement)) {
+        setOpen(false)
+        panelRef.current.querySelector('button')?.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
     document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside)
+      document.removeEventListener('keydown', onKeyDown)
+    }
   }, [])
 
   async function handleSelect(notification) {
@@ -49,7 +59,7 @@ export default function NotificationBell() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-2 w-80 animate-modal-in overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg shadow-stone-900/5 dark:border-stone-700 dark:bg-stone-800"
+          className="fixed inset-x-3 top-14 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full mt-2 sm:w-80 animate-modal-in overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg shadow-stone-900/5 dark:border-stone-700 dark:bg-stone-800"
         >
           <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3 dark:border-stone-700">
             <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">Notifications</span>
