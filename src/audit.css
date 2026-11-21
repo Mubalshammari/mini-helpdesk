@@ -1,0 +1,122 @@
+.history-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+.history-tools .search-box {
+  min-width: min(100%, 15rem);
+}
+.history-tools select {
+  padding: 0.63rem 0.85rem;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  color: var(--ink);
+  font-size: 0.85rem;
+}
+.history-sheet {
+  padding: clamp(1rem, 2.4vw, 1.9rem);
+}
+.history-count {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.history-stream h2 {
+  margin: 1.75rem 0 0.5rem;
+  color: var(--muted);
+  font-weight: 650;
+  font-size: 0.75rem;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+.history-stream li {
+  display: flex;
+  gap: 0.9rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.history-marker {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.7rem;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--sheet));
+}
+.history-marker.account {
+  color: #a24b2b;
+  background: #f6e7de;
+}
+.history-body {
+  flex: 1;
+  min-width: 0;
+}
+.history-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+}
+.history-line time,
+.history-body p span,
+.history-body summary {
+  color: var(--muted);
+  font-size: 0.79rem;
+}
+.history-body p {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.87rem;
+  overflow-wrap: anywhere;
+}
+.history-body p b,
+.history-body p a {
+  font-weight: 550;
+}
+.history-body a:hover,
+.history-body summary:hover {
+  text-decoration: underline;
+}
+.history-values {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.history-values span,
+.history-values strong {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  border: 1px solid var(--line);
+  padding: 0.13rem 0.48rem;
+  border-radius: 0.32rem;
+}
+.history-values strong {
+  color: var(--ink);
+  font-weight: 550;
+}
+.history-body summary {
+  cursor: pointer;
+  width: fit-content;
+  padding-block: 0.24rem;
+}
+.history-body details[open] .history-values {
+  margin-top: 0.4rem;
+}
+@media (max-width: 580px) {
+  .history-tools .search-box {
+    flex-basis: 100%;
+  }
+  .history-tools select {
+    flex: 1;
+  }
+  .history-line {
+    flex-wrap: wrap;
+  }
+}

@@ -22,35 +22,32 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    let active = true
+  const [profileUser, setProfileUser] = useState(null)
+  const userId = session?.user?.id
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!active) return
-      setSession(session)
-      if (session?.user) {
-        setProfile(await fetchProfile(session.user.id))
-      }
+  useEffect(() => {
+    // Supabase emits INITIAL_SESSION on subscription. Fetch the profile outside its auth lock.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, next) => {
+      setSession(next)
       setLoading(false)
     })
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!active) return
-      setSession(session)
-      if (session?.user) {
-        setProfile(await fetchProfile(session.user.id))
-      } else {
-        setProfile(null)
-      }
-    })
-
-    return () => {
-      active = false
-      subscription.unsubscribe()
-    }
+    return () => subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    let active = true
+    setProfile(null)
+    setProfileUser(null)
+    if (userId) {
+      fetchProfile(userId).then(next => {
+        if (active) {
+          setProfile(next)
+          setProfileUser(userId)
+        }
+      })
+    }
+    return () => { active = false }
+  }, [userId])
 
   const signIn = useCallback(async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -85,7 +82,7 @@ export function AuthProvider({ children }) {
     // Every admin is also staff; not every staff member is an admin.
     isAdmin: profile?.role === 'admin',
     isStaff: profile?.role === 'it' || profile?.role === 'admin',
-    loading,
+    loading: loading || Boolean(userId && profileUser !== userId),
     signIn,
     signUp,
     signOut,

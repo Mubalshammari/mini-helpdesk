@@ -18,9 +18,9 @@ function FieldShell({ id, label, error, helperText, required, children }) {
       )}
       {children}
       {error ? (
-        <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>
+        <p id={id + '-hint'} className="text-sm text-rose-600 dark:text-rose-400">{error}</p>
       ) : helperText ? (
-        <p className="text-sm text-stone-500 dark:text-stone-400">{helperText}</p>
+        <p id={id + '-hint'} className="text-sm text-stone-500 dark:text-stone-400">{helperText}</p>
       ) : null}
     </div>
   )
@@ -39,6 +39,7 @@ export const Input = forwardRef(function Input(
         id={fieldId}
         required={required}
         aria-invalid={Boolean(error)}
+        aria-describedby={error || helperText ? fieldId + '-hint' : undefined}
         className={`${fieldClasses(Boolean(error))} ${className}`}
         {...props}
       />
@@ -59,6 +60,7 @@ export const Textarea = forwardRef(function Textarea(
         id={fieldId}
         required={required}
         aria-invalid={Boolean(error)}
+        aria-describedby={error || helperText ? fieldId + '-hint' : undefined}
         className={`${fieldClasses(Boolean(error))} resize-none ${className}`}
         {...props}
       />
@@ -79,6 +81,7 @@ export const Select = forwardRef(function Select(
         id={fieldId}
         required={required}
         aria-invalid={Boolean(error)}
+        aria-describedby={error || helperText ? fieldId + '-hint' : undefined}
         className={`${fieldClasses(Boolean(error))} ${className}`}
         {...props}
       >
