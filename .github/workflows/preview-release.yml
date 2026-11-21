@@ -91,7 +91,21 @@ jobs:
           set -eu
           version=$(node -p 'require("./preview/package.json").version')
           tag="preview-v$version"
+          html=release/Mini-Helpdesk-Preview.html
+          cp preview/index.html "$html"
+          if gh release view "$tag" --json tagName >/dev/null 2>&1; then
+            git fetch --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
+            if ! git diff --quiet "$tag" HEAD -- preview/index.html preview/main.cjs preview/package.json preview/package-lock.json preview/assets preview/LICENSE preview/THIRD-PARTY-NOTICES.txt; then
+              echo "The desktop inputs changed. Bump the preview version to publish a new release." >&2
+              exit 1
+            fi
+            assets=$(gh release view "$tag" --json assets --jq '.assets[].name')
+            if ! grep -Fxq 'Mini-Helpdesk-Preview.html' <<< "$assets"; then
+              gh release upload "$tag" "$html"
+            fi
+            exit 0
+          fi
           gh release create "$tag" --target "$GITHUB_SHA" \
             --title "Mini Helpdesk Preview $version" \
-            --notes "Offline desktop preview for Windows x64. The wizard installs Mini Helpdesk for the current user. Download the setup and optionally verify its SHA-256 checksum." \
-            release/Mini-Helpdesk-Preview-Setup-x64.exe release/SHA256SUMS.txt
+            --notes "Download the HTML to try the offline workspace in a browser, or install the Windows x64 desktop app. SHA256SUMS.txt contains the installer checksum." \
+            release/Mini-Helpdesk-Preview-Setup-x64.exe release/SHA256SUMS.txt "$html"

@@ -2,7 +2,7 @@
 
 A company support desk that takes a request from an employee’s first report through assignment, conversation and resolution. Employees follow their own tickets. The support team shares a queue, and administrators can review changes.
 
-[Download the interactive HTML preview](https://github.com/Mubalshammari/mini-helpdesk/raw/refs/heads/main/preview/index.html) · [Build the Windows preview](preview/#windows-setup) · [Company workspace changes](https://github.com/Mubalshammari/mini-helpdesk/pull/1)
+[Download the interactive HTML preview](https://github.com/Mubalshammari/mini-helpdesk/releases/download/preview-v1.0.0/Mini-Helpdesk-Preview.html) · [Download Windows setup (x64)](https://github.com/Mubalshammari/mini-helpdesk/releases/download/preview-v1.0.0/Mini-Helpdesk-Preview-Setup-x64.exe) · [Company workspace changes](https://github.com/Mubalshammari/mini-helpdesk/pull/1)
 
 ![Administrator overview showing unassigned tickets, current workload, recent requests and two active urgent tickets](docs/showcase/overview.webp)
 
