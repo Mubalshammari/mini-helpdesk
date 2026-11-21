@@ -1,0 +1,97 @@
+name: Publish the Windows preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'preview/package.json'
+      - '.github/workflows/preview-release.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-preview-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: preview/package-lock.json
+      - run: npm ci
+      - run: npm run setup:windows
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Check the installed desktop application
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Join-Path $PWD 'dist/Mini-Helpdesk-Preview-Setup-x64.exe'
+          $target = Join-Path $env:RUNNER_TEMP 'HelpdeskPreviewTest'
+          $install = Start-Process -FilePath $installer -ArgumentList "/S /D=$target" -PassThru -Wait
+          if ($install.ExitCode -ne 0) { throw "Setup exited with $($install.ExitCode)" }
+          $exe = Join-Path $target 'Mini Helpdesk.exe'
+          $app = Start-Process -FilePath $exe -PassThru
+          try {
+            $limit = (Get-Date).AddSeconds(30)
+            do {
+              Start-Sleep -Milliseconds 500
+              $app.Refresh()
+              if ($app.HasExited) { throw 'The application closed before displaying its window.' }
+            } until ($app.MainWindowTitle -like '*Mini Helpdesk*' -or (Get-Date) -gt $limit)
+            if ($app.MainWindowTitle -notlike '*Mini Helpdesk*') { throw 'The helpdesk window did not open.' }
+          } finally {
+            if (-not $app.HasExited) {
+              $app.CloseMainWindow() | Out-Null
+              if (-not $app.WaitForExit(10000)) { $app.Kill($true); $app.WaitForExit() }
+            }
+          }
+          $remove = Get-ChildItem -LiteralPath $target -Filter 'Uninstall*.exe' | Select-Object -First 1
+          if (-not $remove) { throw 'The uninstaller was not installed.' }
+          $uninstall = Start-Process -FilePath $remove.FullName -ArgumentList '/S' -PassThru -Wait
+          $limit = (Get-Date).AddSeconds(30)
+          while ((Test-Path -LiteralPath $exe) -and (Get-Date) -lt $limit) { Start-Sleep -Seconds 1 }
+          if ($uninstall.ExitCode -ne 0 -or (Test-Path -LiteralPath $exe)) { throw 'The uninstaller did not remove the application.' }
+          $sum = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash.ToLowerInvariant()
+          "$sum  Mini-Helpdesk-Preview-Setup-x64.exe" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-preview
+          path: |
+            preview/dist/Mini-Helpdesk-Preview-Setup-x64.exe
+            preview/dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-preview
+          path: release
+      - name: Publish the versioned download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          version=$(node -p 'require("./preview/package.json").version')
+          tag="preview-v$version"
+          gh release create "$tag" --target "$GITHUB_SHA" \
+            --title "Mini Helpdesk Preview $version" \
+            --notes "Offline desktop preview for Windows x64. The wizard installs Mini Helpdesk for the current user. Download the setup and optionally verify its SHA-256 checksum." \
+            release/Mini-Helpdesk-Preview-Setup-x64.exe release/SHA256SUMS.txt

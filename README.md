@@ -1,5 +1,38 @@
 # Mini Helpdesk
 
+A company support desk that takes a request from an employee’s first report through assignment, conversation and resolution. Employees follow their own tickets. The support team shares a queue, and administrators can review changes.
+
+[Download the interactive HTML preview](https://github.com/Mubalshammari/mini-helpdesk/raw/refs/heads/main/preview/index.html) · [Build the Windows preview](preview/#windows-setup) · [Company workspace changes](https://github.com/Mubalshammari/mini-helpdesk/pull/1)
+
+![Administrator overview showing unassigned tickets, current workload, recent requests and two active urgent tickets](docs/showcase/overview.webp)
+
+### Try the workspace
+
+Open the downloaded HTML file in your browser. It starts with 28 fictional tickets. Use **Preview account** to switch roles. Your changes stay on the device and persist when you reopen the same copy in the same browser.
+
+| Role | Something to try |
+| --- | --- |
+| Employee | Create a ticket, attach a screenshot, then open the ticket to view the image and conversation. |
+| IT support | Open **Urgent tickets**, claim a request, then use **Hand off** to pass it to a colleague with a private note. |
+| Administrator | Check the workload by status, then open **Audit trail** to see who changed a ticket or its assignment. |
+
+### Inside the preview
+
+| The support queue | A private handoff |
+| --- | --- |
+| [![Desktop queue with priority, status and assignee columns](docs/showcase/queue.webp)](docs/showcase/queue.webp) | [![Support agent selecting a colleague and entering a private handoff note](docs/showcase/handoff.webp)](docs/showcase/handoff.webp) |
+
+<details>
+<summary><strong>Employee view on a phone</strong> · a ticket with its screenshot attached</summary>
+
+<img src="docs/showcase/mobile.webp" alt="Employee ticket on mobile with an attached image of a paused print queue" width="300">
+
+</details>
+
+The screenshots above come from the offline preview. The connected application uses Supabase for employee accounts, shared tickets and database access rules.
+
+## Connected application
+
 I built Mini Helpdesk, an internal IT support ticketing system where employees
 file and track tickets and IT staff triage, resolve, and review a tamper-proof
 history of every change. The thing I cared about most: **every rule that matters

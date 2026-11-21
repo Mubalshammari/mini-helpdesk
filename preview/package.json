@@ -1,0 +1,44 @@
+{
+  "name": "mini-helpdesk-preview",
+  "productName": "Mini Helpdesk Preview",
+  "version": "1.0.0",
+  "description": "Mini Helpdesk offline support workspace",
+  "author": "Mubarak Alshammari",
+  "license": "MIT",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "setup:windows": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.4.1",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.minihelpdesk.preview",
+    "productName": "Mini Helpdesk Preview",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "main.cjs",
+      "LICENSE",
+      "THIRD-PARTY-NOTICES.txt"
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "executableName": "Mini Helpdesk"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Mini Helpdesk Preview",
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Mini-Helpdesk-Preview-Setup-x64.${ext}"
+    }
+  }
+}
